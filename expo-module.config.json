@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ExpoBackgroundStreamerModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.backgroundstreamer.ExpoBackgroundStreamerModule"]
+  }
+}
