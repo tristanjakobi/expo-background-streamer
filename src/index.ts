@@ -1,10 +1,9 @@
 // Reexport the native module. On web, it will be resolved to ExpoBackgroundStreamerModule.web.ts
 // and on native platforms to ExpoBackgroundStreamerModule.ts
-export { default } from "./ExpoBackgroundStreamerModule";
-export * from "./ExpoBackgroundStreamer.types";
 import { EventSubscription } from "expo-modules-core";
-import ExpoBackgroundStreamerModule from "./ExpoBackgroundStreamerModule";
-import { ExpoBackgroundStreamerModuleEvents } from "./ExpoBackgroundStreamer.types";
+import ExpoBackgroundStreamerModule from "./ExpoBackgroundStreamerModule.js";
+import { ExpoBackgroundStreamerModuleEvents } from "./ExpoBackgroundStreamer.types.js";
+export * from "./ExpoBackgroundStreamer.types.js";
 
 export type OnUploadProgress = {
   type: "upload-progress";
@@ -46,3 +45,5 @@ export function addListener<T extends keyof ExpoBackgroundStreamerModuleEvents>(
 export function removeListener(listener: EventSubscription) {
   return listener.remove();
 }
+
+export default ExpoBackgroundStreamerModule;

@@ -4,7 +4,7 @@ import {
   ExpoBackgroundStreamerModuleEvents,
   FileInfo,
   UploadOptions,
-} from "./ExpoBackgroundStreamer.types";
+} from "./ExpoBackgroundStreamer.types.js";
 
 interface ExpoBackgroundStreamerModule {
   getFileInfo(path: string): Promise<FileInfo>;
@@ -18,6 +18,7 @@ interface ExpoBackgroundStreamerModule {
   ): any;
 }
 
-export default requireNativeModule<ExpoBackgroundStreamerModule>(
-  "ExpoBackgroundStreamer"
-);
+const ExpoBackgroundStreamerModule =
+  requireNativeModule<ExpoBackgroundStreamerModule>("ExpoBackgroundStreamer");
+
+export default ExpoBackgroundStreamerModule;
