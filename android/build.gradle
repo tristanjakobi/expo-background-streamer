@@ -1,4 +1,5 @@
 apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
 
 group = 'expo.modules.backgroundstreamer'
 version = '0.1.0'
@@ -33,11 +34,48 @@ if (useManagedAndroidSdkVersions) {
 
 android {
   namespace "expo.modules.backgroundstreamer"
+  compileSdkVersion safeExtGet("compileSdkVersion", 34)
+  
   defaultConfig {
+    minSdkVersion safeExtGet("minSdkVersion", 21)
+    targetSdkVersion safeExtGet("targetSdkVersion", 34)
     versionCode 1
     versionName "0.1.0"
+    ndk {
+      abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+    }
   }
+  
   lintOptions {
     abortOnError false
   }
+  
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+  
+  kotlinOptions {
+    jvmTarget = JavaVersion.VERSION_17.toString()
+  }
+
+  packagingOptions {
+    jniLibs {
+      useLegacyPackaging = true
+    }
+  }
+}
+
+dependencies {
+    implementation project(':expo-modules-core')
+    
+    // React Native
+    implementation "com.facebook.react:react-native:+"
+    
+    // OkHttp for networking
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
+    implementation "com.squareup.okio:okio:3.8.0"
+    
+    // Kotlin
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0"
 }

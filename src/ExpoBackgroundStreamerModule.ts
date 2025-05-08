@@ -1,12 +1,23 @@
-import { NativeModule, requireNativeModule } from 'expo';
+import { requireNativeModule } from "expo-modules-core";
+import {
+  DownloadOptions,
+  ExpoBackgroundStreamerModuleEvents,
+  FileInfo,
+  UploadOptions,
+} from "./ExpoBackgroundStreamer.types";
 
-import { ExpoBackgroundStreamerModuleEvents } from './ExpoBackgroundStreamer.types';
-
-declare class ExpoBackgroundStreamerModule extends NativeModule<ExpoBackgroundStreamerModuleEvents> {
-  PI: number;
-  hello(): string;
-  setValueAsync(value: string): Promise<void>;
+interface ExpoBackgroundStreamerModule {
+  getFileInfo(path: string): Promise<FileInfo>;
+  startUpload(options: UploadOptions): Promise<string>;
+  cancelUpload(uploadId: string): Promise<boolean>;
+  startDownload(options: DownloadOptions): Promise<string>;
+  cancelDownload(downloadId: string): Promise<boolean>;
+  addListener<T extends keyof ExpoBackgroundStreamerModuleEvents>(
+    eventName: T,
+    listener: ExpoBackgroundStreamerModuleEvents[T]
+  ): any;
 }
 
-// This call loads the native module object from the JSI.
-export default requireNativeModule<ExpoBackgroundStreamerModule>('ExpoBackgroundStreamer');
+export default requireNativeModule<ExpoBackgroundStreamerModule>(
+  "ExpoBackgroundStreamer"
+);

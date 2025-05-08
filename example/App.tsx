@@ -1,49 +1,46 @@
-import { useEvent } from 'expo';
-import ExpoBackgroundStreamer, { ExpoBackgroundStreamerView } from 'expo-background-streamer';
-import { Button, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import React, { useState, useEffect } from "react";
+import { Button, SafeAreaView, ScrollView, Text, View } from "react-native";
+import ExpoBackgroundStreamer from "expo-background-streamer";
 
 export default function App() {
-  const onChangePayload = useEvent(ExpoBackgroundStreamer, 'onChange');
+  const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    const subscription = ExpoBackgroundStreamer.addListener(
+      "upload-progress",
+      (event) => {
+        setStatus(`Upload progress: ${event.progress}%`);
+      }
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.container}>
-        <Text style={styles.header}>Module API Example</Text>
-        <Group name="Constants">
-          <Text>{ExpoBackgroundStreamer.PI}</Text>
-        </Group>
-        <Group name="Functions">
-          <Text>{ExpoBackgroundStreamer.hello()}</Text>
-        </Group>
-        <Group name="Async functions">
+        <Text style={styles.header}>Background Streamer Example</Text>
+        <View style={styles.group}>
+          <Text style={styles.status}>{status}</Text>
           <Button
-            title="Set value"
+            title="Start Upload"
             onPress={async () => {
-              await ExpoBackgroundStreamer.setValueAsync('Hello from JS!');
+              try {
+                await ExpoBackgroundStreamer.startUpload({
+                  url: "https://example.com/upload",
+                  path: "/path/to/file",
+                  headers: { "Content-Type": "application/octet-stream" },
+                });
+              } catch (error) {
+                setStatus(`Error: ${error}`);
+              }
             }}
           />
-        </Group>
-        <Group name="Events">
-          <Text>{onChangePayload?.value}</Text>
-        </Group>
-        <Group name="Views">
-          <ExpoBackgroundStreamerView
-            url="https://www.example.com"
-            onLoad={({ nativeEvent: { url } }) => console.log(`Loaded: ${url}`)}
-            style={styles.view}
-          />
-        </Group>
+        </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Group(props: { name: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.group}>
-      <Text style={styles.groupHeader}>{props.name}</Text>
-      {props.children}
-    </View>
   );
 }
 
@@ -58,16 +55,20 @@ const styles = {
   },
   group: {
     margin: 20,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 10,
     padding: 20,
   },
   container: {
     flex: 1,
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
   },
   view: {
     flex: 1,
     height: 200,
+  },
+  status: {
+    fontSize: 18,
+    marginBottom: 20,
   },
 };

@@ -39,5 +39,9 @@
     "expo": "*",
     "react": "*",
     "react-native": "*"
+  },
+  "expo": {
+    "name": "expo-background-streamer",
+    "plugin": "./plugin.js"
   }
 }

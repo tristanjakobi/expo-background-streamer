@@ -22,7 +22,10 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "expo.modules.backgroundstreamer.example"
+      "package": "expo.modules.backgroundstreamer.example",
+      "buildProperties": {
+        "android.packagingOptions.jniLibs.useLegacyPackaging": true
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
