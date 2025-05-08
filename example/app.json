@@ -24,7 +24,8 @@
       "edgeToEdgeEnabled": true,
       "package": "expo.modules.backgroundstreamer.example",
       "buildProperties": {
-        "android.packagingOptions.jniLibs.useLegacyPackaging": true
+        "android.packagingOptions.jniLibs.useLegacyPackaging": true,
+        "android.defaultConfig.ndk.pageSize": "16384"
       }
     },
     "web": {

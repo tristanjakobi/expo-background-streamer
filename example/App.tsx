@@ -1,22 +1,70 @@
 import React, { useState, useEffect } from "react";
-import { Button, SafeAreaView, ScrollView, Text, View } from "react-native";
+import {
+  Button,
+  SafeAreaView,
+  ScrollView,
+  Text,
+  View,
+  Alert,
+} from "react-native";
 import ExpoBackgroundStreamer from "expo-background-streamer";
 
 export default function App() {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("Initializing...");
 
   useEffect(() => {
-    const subscription = ExpoBackgroundStreamer.addListener(
-      "upload-progress",
-      (event) => {
-        setStatus(`Upload progress: ${event.progress}%`);
-      }
-    );
+    try {
+      console.log("Setting up upload listener...");
+      const subscription = ExpoBackgroundStreamer.addListener(
+        "upload-progress",
+        (event) => {
+          console.log("Upload progress event:", event);
+          setStatus(`Upload progress: ${event.progress}%`);
+        }
+      );
 
-    return () => {
-      subscription.remove();
-    };
+      console.log("Upload listener set up successfully");
+      setStatus("Ready");
+
+      return () => {
+        console.log("Cleaning up upload listener...");
+        subscription.remove();
+      };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("Error in useEffect:", error);
+      setStatus(`Error: ${errorMessage}`);
+    }
   }, []);
+
+  const testUpload = async () => {
+    try {
+      console.log("Starting test upload...");
+      setStatus("Starting upload...");
+
+      // Test file path - using a simple text file
+      const filePath =
+        "/data/data/com.expo.backgroundstreamer.example/files/test.txt";
+      const uploadUrl = "https://httpbin.org/post"; // Using a test endpoint
+
+      console.log("Calling startUpload with:", { filePath, uploadUrl });
+      const uploadId = await ExpoBackgroundStreamer.startUpload({
+        url: uploadUrl,
+        path: filePath,
+        headers: { "Content-Type": "text/plain" },
+      });
+
+      console.log("Upload started successfully with ID:", uploadId);
+      setStatus(`Upload started with ID: ${uploadId}`);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("Upload error:", error);
+      setStatus(`Upload error: ${errorMessage}`);
+      Alert.alert("Upload Error", errorMessage);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -25,18 +73,9 @@ export default function App() {
         <View style={styles.group}>
           <Text style={styles.status}>{status}</Text>
           <Button
-            title="Start Upload"
-            onPress={async () => {
-              try {
-                await ExpoBackgroundStreamer.startUpload({
-                  url: "https://example.com/upload",
-                  path: "/path/to/file",
-                  headers: { "Content-Type": "application/octet-stream" },
-                });
-              } catch (error) {
-                setStatus(`Error: ${error}`);
-              }
-            }}
+            title="Test Upload"
+            onPress={testUpload}
+            disabled={status === "Initializing..."}
           />
         </View>
       </ScrollView>

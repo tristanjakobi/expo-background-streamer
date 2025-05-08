@@ -59,8 +59,8 @@ class ExpoBackgroundStreamerModule : Module() {
     private var currentUploadId: String? = null
     private val activeUploadTasks = mutableMapOf<String, Any>()
     private val activeDownloadTasks = mutableMapOf<String, Any>()
-    private lateinit var uploadService: UploadService
-    private lateinit var observer: GlobalStreamObserver
+    private var uploadService: UploadService? = null
+    private var observer: GlobalStreamObserver? = null
     
     companion object {
         private const val TAG = "ExpoBackgroundStreamer"
@@ -72,66 +72,104 @@ class ExpoBackgroundStreamerModule : Module() {
         Events("upload-progress", "download-progress", "upload-complete", "download-complete", "error", "debug")
 
         OnCreate {
-            val reactContext = appContext.reactContext as ReactApplicationContext
-            uploadService = UploadService(reactContext)
-            observer = GlobalStreamObserver(reactContext)
+            try {
+                Log.d(TAG, "Module onCreate")
+                val reactContext = appContext.reactContext as? ReactApplicationContext
+                if (reactContext != null) {
+                    Log.d(TAG, "Initializing services")
+                    uploadService = UploadService(reactContext)
+                    observer = GlobalStreamObserver(reactContext)
+                    Log.d(TAG, "Services initialized successfully")
+                } else {
+                    Log.e(TAG, "React context is null")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize module: ${e.message}", e)
+            }
         }
 
-        Function("getFileInfo") { path: String, promise: Promise ->
+        OnDestroy {
+            Log.d(TAG, "Module onDestroy")
+            uploadService = null
+            observer = null
+        }
+
+        AsyncFunction("getFileInfo") { path: String ->
             try {
+                Log.d(TAG, "Getting file info for: $path")
                 val file = File(path)
                 val exists = file.exists()
                 val size = if (exists) file.length() else 0
                 val name = file.name
                 val extension = if (name.contains(".")) name.substringAfterLast(".") else ""
 
-                promise.resolve(mapOf(
+                mapOf(
                     "exists" to exists,
                     "size" to size,
                     "name" to name,
                     "extension" to extension,
                     "mimeType" to getMimeType(extension)
-                ))
+                )
             } catch (e: Exception) {
-                promise.reject(CodedException("ERROR", "Failed to get file info: ${e.message}", e))
+                Log.e(TAG, "Failed to get file info: ${e.message}", e)
+                throw CodedException("ERROR", "Failed to get file info: ${e.message}", e)
             }
         }
 
-        Function("startUpload") { url: String, filePath: String, headers: Map<String, String>, promise: Promise ->
+        AsyncFunction("startUpload") { options: UploadOptions ->
             try {
-                val uploadId = java.util.UUID.randomUUID().toString()
-                uploadService.startUpload(uploadId, url, filePath, headers)
-                promise.resolve(uploadId)
+                Log.d(TAG, "Starting upload: url=${options.url}, path=${options.path}")
+                val service = uploadService
+                if (service == null) {
+                    Log.e(TAG, "Upload service not initialized")
+                    throw CodedException("ERROR", "Upload service not initialized", null)
+                }
+                val uploadId = UUID.randomUUID().toString()
+                Log.d(TAG, "Generated upload ID: $uploadId")
+                service.startUpload(uploadId, options.url, options.path, options.headers)
+                uploadId
             } catch (e: Exception) {
-                promise.reject(CodedException("ERROR", "Failed to start upload: ${e.message}", e))
+                Log.e(TAG, "Failed to start upload: ${e.message}", e)
+                throw CodedException("ERROR", "Failed to start upload: ${e.message}", e)
             }
         }
 
-        Function("cancelUpload") { uploadId: String, promise: Promise ->
+        AsyncFunction("cancelUpload") { uploadId: String ->
             try {
-                uploadService.cancelUpload(uploadId)
-                promise.resolve(null)
+                Log.d(TAG, "Cancelling upload: $uploadId")
+                val service = uploadService
+                if (service == null) {
+                    Log.e(TAG, "Upload service not initialized")
+                    throw CodedException("ERROR", "Upload service not initialized", null)
+                }
+                service.cancelUpload(uploadId)
+                Unit
             } catch (e: Exception) {
-                promise.reject(CodedException("ERROR", "Failed to cancel upload: ${e.message}", e))
+                Log.e(TAG, "Failed to cancel upload: ${e.message}", e)
+                throw CodedException("ERROR", "Failed to cancel upload: ${e.message}", e)
             }
         }
 
-        Function("startDownload") { url: String, filePath: String, headers: Map<String, String>, promise: Promise ->
+        AsyncFunction("startDownload") { options: DownloadOptions ->
             try {
-                val downloadId = java.util.UUID.randomUUID().toString()
+                Log.d(TAG, "Starting download: url=${options.url}, path=${options.path}")
+                val downloadId = UUID.randomUUID().toString()
                 // TODO: Implement download functionality
-                promise.resolve(downloadId)
+                downloadId
             } catch (e: Exception) {
-                promise.reject(CodedException("ERROR", "Failed to start download: ${e.message}", e))
+                Log.e(TAG, "Failed to start download: ${e.message}", e)
+                throw CodedException("ERROR", "Failed to start download: ${e.message}", e)
             }
         }
 
-        Function("cancelDownload") { downloadId: String, promise: Promise ->
+        AsyncFunction("cancelDownload") { downloadId: String ->
             try {
+                Log.d(TAG, "Cancelling download: $downloadId")
                 // TODO: Implement download cancellation
-                promise.resolve(null)
+                Unit
             } catch (e: Exception) {
-                promise.reject(CodedException("ERROR", "Failed to cancel download: ${e.message}", e))
+                Log.e(TAG, "Failed to cancel download: ${e.message}", e)
+                throw CodedException("ERROR", "Failed to cancel download: ${e.message}", e)
             }
         }
     }
