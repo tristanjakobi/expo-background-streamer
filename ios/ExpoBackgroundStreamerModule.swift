@@ -65,12 +65,11 @@ public class ExpoBackgroundStreamerModule: Module {
                 throw NSError(domain: "ExpoBackgroundStreamer", code: 1, userInfo: [NSLocalizedDescriptionKey: "File path is required"])
             }
             
-            guard let encryptionKey = options["encryptionKey"] as? String else {
-                throw NSError(domain: "ExpoBackgroundStreamer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Encryption key is required"])
-            }
-            
-            guard let encryptionNonce = options["encryptionNonce"] as? String else {
-                throw NSError(domain: "ExpoBackgroundStreamer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Encryption nonce is required"])
+            // Get encryption options from nested structure
+            guard let encryptionOptions = options["encryption"] as? [String: Any],
+                  let encryptionKey = encryptionOptions["key"] as? String,
+                  let encryptionNonce = encryptionOptions["nonce"] as? String else {
+                throw NSError(domain: "ExpoBackgroundStreamer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Encryption key and nonce are required"])
             }
             
             // Get optional parameters with defaults

@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "expo": "~53.0.8",
+    "expo-file-system": "~16.0.8",
+    "expo-modules-core": "~1.11.9",
     "react": "19.0.0",
     "react-native": "0.79.2"
   },
