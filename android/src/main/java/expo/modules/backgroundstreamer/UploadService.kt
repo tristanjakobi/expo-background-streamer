@@ -56,15 +56,19 @@ class UploadService(private val reactContext: ReactApplicationContext) {
                 try {
                     Log.d("UploadService", "Starting file upload, size: ${file.length()}")
                     file.inputStream().use { input ->
-                        // Create encrypted input stream
-                        val keyBytes = Base64.getDecoder().decode(encryptionKey)
-                        val nonceBytes = Base64.getDecoder().decode(encryptionNonce)
-                        val encryptedStream = EncryptedInputStream(input, keyBytes, nonceBytes)
+                        val stream = if (encryptionKey.isNotEmpty() && encryptionNonce.isNotEmpty()) {
+                            // Create encrypted input stream
+                            val keyBytes = Base64.getDecoder().decode(encryptionKey)
+                            val nonceBytes = Base64.getDecoder().decode(encryptionNonce)
+                            EncryptedInputStream(input, keyBytes, nonceBytes)
+                        } else {
+                            input
+                        }
                         
                         val buffer = ByteArray(16384)
                         var bytesRead: Int
                         var totalBytesRead = 0L
-                        while (encryptedStream.read(buffer).also { bytesRead = it } != -1) {
+                        while (stream.read(buffer).also { bytesRead = it } != -1) {
                             sink.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
                             val progress = (totalBytesRead * 100 / file.length()).toInt()

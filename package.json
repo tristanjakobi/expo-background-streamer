@@ -1,6 +1,6 @@
 {
   "name": "expo-background-streamer",
-  "version": "0.1.53",
+  "version": "0.1.55",
   "description": "A powerful background file uploader for Expo/React Native applications",
   "main": "./build/BackgroundStreamer.js",
   "types": "./build/BackgroundStreamer.d.ts",

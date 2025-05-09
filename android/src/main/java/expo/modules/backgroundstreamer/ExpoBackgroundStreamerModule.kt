@@ -32,7 +32,7 @@ class UploadOptions : Record {
     var headers: Map<String, String> = mapOf()
     
     @Field
-    var encryption: Map<String, String> = mapOf()
+    var encryption: Map<String, Any> = mapOf()
 }
 
 class DownloadOptions : Record {
@@ -123,16 +123,24 @@ class ExpoBackgroundStreamerModule : Module() {
                 }
 
                 // Get encryption options
-                val encryptionKey = options.encryption["key"]
-                val encryptionNonce = options.encryption["nonce"]
+                val encryptionKey = options.encryption["key"] as? String
+                val encryptionNonce = options.encryption["nonce"] as? String
+                val encryptionEnabled = options.encryption["enabled"] as? Boolean ?: false
                 
-                if (encryptionKey == null || encryptionNonce == null) {
-                    throw CodedException("ERROR", "Encryption key and nonce are required", null)
+                if (encryptionEnabled && (encryptionKey == null || encryptionNonce == null)) {
+                    throw CodedException("ERROR", "Encryption key and nonce are required when encryption is enabled", null)
                 }
 
                 val uploadId = UUID.randomUUID().toString()
                 Log.d(TAG, "Generated upload ID: $uploadId")
-                service.startUpload(uploadId, options.url, options.path, options.headers, encryptionKey, encryptionNonce)
+                service.startUpload(
+                    uploadId, 
+                    options.url, 
+                    options.path, 
+                    options.headers,
+                    encryptionKey ?: "",
+                    encryptionNonce ?: ""
+                )
                 uploadId
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start upload: ${e.message}", e)
