@@ -1,20 +1,9 @@
 {
   "name": "expo-background-streamer",
-  "version": "0.1.10",
+  "version": "0.1.39",
   "description": "A powerful background file uploader for Expo/React Native applications",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
-  "sideEffects": false,
-  "exports": {
-    ".": {
-      "import": "./build/index.js",
-      "require": "./build/index.js",
-      "types": "./build/index.d.ts"
-    }
-  },
-  "resolutions": {
-    "expo-modules-core": "2.3.12"
-  },
   "scripts": {
     "build": "expo-module build",
     "clean": "expo-module clean",
@@ -22,9 +11,7 @@
     "test": "expo-module test",
     "prepare": "expo-module prepare",
     "prepublishOnly": "expo-module prepublishOnly",
-    "expo-module": "expo-module",
-    "open:ios": "xed example/ios",
-    "open:android": "open -a \"Android Studio\" example/android"
+    "expo-module": "expo-module"
   },
   "keywords": [
     "react-native",
@@ -40,18 +27,16 @@
   "license": "MIT",
   "homepage": "https://github.com/tristanjakobi/expo-background-streamer#readme",
   "devDependencies": {
-    "@types/react": "~19.0.0",
-    "expo": "~53.0.0",
-    "expo-module-scripts": "^4.1.6",
-    "react-native": "0.79.1"
+    "expo-module-scripts": "^4.1.7",
+    "expo-modules-core": "2.3.12"
   },
   "peerDependencies": {
-    "expo": "*",
-    "react": "*",
-    "react-native": "*"
+    "expo": ">=49.0.0",
+    "expo-modules-core": "2.3.12"
   },
-  "expo": {
-    "name": "expo-background-streamer",
-    "plugin": "./plugin.js"
+  "peerDependenciesMeta": {
+    "expo": {
+      "optional": true
+    }
   }
 }
