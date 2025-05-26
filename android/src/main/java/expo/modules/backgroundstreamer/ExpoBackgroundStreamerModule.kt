@@ -167,8 +167,21 @@ class ExpoBackgroundStreamerModule : Module() {
         AsyncFunction("startDownload") { options: DownloadOptions ->
             try {
                 Log.d(TAG, "Starting download: url=${options.url}, path=${options.path}")
-                val downloadId = UUID.randomUUID().toString()
-                // TODO: Implement download functionality
+                val service = uploadService
+                if (service == null) {
+                    Log.e(TAG, "Upload service not initialized")
+                    throw CodedException("ERROR", "Upload service not initialized", null)
+                }
+
+                val downloadId = options.customTransferId ?: UUID.randomUUID().toString()
+                Log.d(TAG, "Generated download ID: $downloadId")
+                
+                service.startDownload(
+                    downloadId,
+                    options.url,
+                    options.path,
+                    options.headers
+                )
                 downloadId
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start download: ${e.message}", e)
@@ -179,7 +192,12 @@ class ExpoBackgroundStreamerModule : Module() {
         AsyncFunction("cancelDownload") { downloadId: String ->
             try {
                 Log.d(TAG, "Cancelling download: $downloadId")
-                // TODO: Implement download cancellation
+                val service = uploadService
+                if (service == null) {
+                    Log.e(TAG, "Upload service not initialized")
+                    throw CodedException("ERROR", "Upload service not initialized", null)
+                }
+                service.cancelDownload(downloadId)
                 Unit
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to cancel download: ${e.message}", e)

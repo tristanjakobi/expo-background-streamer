@@ -23,7 +23,9 @@ Pod::Spec.new do |s|
   # Swift/Objective-C compatibility
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
+    'SWIFT_INSTALL_OBJC_HEADER' => 'NO'
   }
 
   s.source_files = "**/*.{h,m,mm,swift,hpp,cpp}"
+  s.module_name = 'ExpoBackgroundStreamer'
 end

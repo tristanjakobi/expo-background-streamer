@@ -19,10 +19,12 @@ import java.io.Closeable
 import com.facebook.react.bridge.ReactApplicationContext
 import okio.BufferedSink
 import java.util.concurrent.TimeUnit
+import java.io.FileOutputStream
 
 class UploadService(private val reactContext: ReactApplicationContext) {
     private val executor = Executors.newCachedThreadPool()
     private val activeUploads = mutableMapOf<String, Call>()
+    private val activeDownloads = mutableMapOf<String, Call>()
     private val uploadIdCounter = AtomicInteger(0)
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -111,7 +113,7 @@ class UploadService(private val reactContext: ReactApplicationContext) {
                     if (response.isSuccessful) {
                         val responseBody = response.body?.string() ?: ""
                         Log.d("UploadService", "Upload completed successfully")
-                        observer.onUploadComplete(uploadId, responseBody)
+                        observer.onUploadComplete(uploadId, responseBody, response.code, response.headers.toMap())
                     } else {
                         Log.e("UploadService", "Upload failed with status: ${response.code}")
                         observer.onUploadError(uploadId, "Upload failed with status: ${response.code}")
@@ -128,6 +130,95 @@ class UploadService(private val reactContext: ReactApplicationContext) {
                 call.cancel()
             }
             activeUploads.remove(uploadId)
+        }
+    }
+
+    fun startDownload(
+        downloadId: String,
+        url: String,
+        filePath: String,
+        headers: Map<String, String> = emptyMap()
+    ) {
+        Log.d("UploadService", "Starting download: $downloadId, url: $url, path: $filePath")
+        
+        val request = Request.Builder()
+            .url(url)
+            .apply {
+                headers.forEach { (key, value) ->
+                    addHeader(key, value)
+                }
+            }
+            .build()
+
+        val call = client.newCall(request)
+        activeDownloads[downloadId] = call
+
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                Log.e("UploadService", "Download failed: ${e.message}", e)
+                activeDownloads.remove(downloadId)
+                observer.onDownloadError(downloadId, e.message ?: "Download failed")
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                Log.d("UploadService", "Download response received: ${response.code}")
+                activeDownloads.remove(downloadId)
+                
+                response.use {
+                    if (!response.isSuccessful) {
+                        Log.e("UploadService", "Download failed with status: ${response.code}")
+                        observer.onDownloadError(downloadId, "Download failed with status: ${response.code}")
+                        return
+                    }
+
+                    val body = response.body ?: run {
+                        observer.onDownloadError(downloadId, "Empty response body")
+                        return
+                    }
+
+                    val contentLength = body.contentLength()
+                    var bytesRead = 0L
+
+                    try {
+                        val file = File(filePath)
+                        file.parentFile?.mkdirs()
+                        
+                        FileOutputStream(file).use { output ->
+                            val buffer = ByteArray(8192)
+                            val input = body.byteStream()
+                            
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read == -1) break
+                                
+                                output.write(buffer, 0, read)
+                                bytesRead += read
+                                
+                                val progress = (bytesRead * 100 / contentLength).toInt()
+                                observer.onDownloadProgress(downloadId, bytesRead, contentLength)
+                            }
+                        }
+                        
+                        Log.d("UploadService", "Download completed successfully")
+                        val mimeType = response.body?.contentType()?.toString() ?: "application/octet-stream"
+                        observer.onDownloadComplete(downloadId, filePath, mimeType)
+                    } catch (e: Exception) {
+                        Log.e("UploadService", "Error saving downloaded file: ${e.message}", e)
+                        observer.onDownloadError(downloadId, "Error saving file: ${e.message}")
+                    }
+                }
+            }
+        })
+    }
+
+    fun cancelDownload(downloadId: String) {
+        Log.d("UploadService", "Cancelling download: $downloadId")
+        activeDownloads[downloadId]?.let { call ->
+            if (!call.isCanceled()) {
+                call.cancel()
+                activeDownloads.remove(downloadId)
+                observer.onDownloadError(downloadId, "Download cancelled")
+            }
         }
     }
 } 

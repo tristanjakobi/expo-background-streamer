@@ -32,37 +32,65 @@ export interface ExpoBackgroundStreamerModuleEvents {
 export type OnUploadProgress = {
   uploadId: string;
   progress: number;
+  bytesWritten: number;
+  totalBytes: number;
+  speed: number; // bytes per second
+  estimatedTimeRemaining: number; // seconds
 };
 
 export type OnDownloadProgress = {
   downloadId: string;
   progress: number;
+  bytesWritten: number;
+  totalBytes: number;
+  speed: number; // bytes per second
+  estimatedTimeRemaining: number; // seconds
 };
 
 export type OnUploadComplete = {
   uploadId: string;
+  response: string;
+  responseHeaders: Record<string, string>;
+  responseCode: number;
+  totalBytes: number;
+  duration: number; // seconds
 };
 
 export type OnDownloadComplete = {
   downloadId: string;
+  filePath: string;
+  totalBytes: number;
+  duration: number; // seconds
+  mimeType: string;
 };
 
 export type OnUploadCancelled = {
   uploadId: string;
+  bytesWritten: number;
+  totalBytes: number;
+  reason?: string;
 };
 
 export type OnDownloadCancelled = {
   downloadId: string;
+  bytesWritten: number;
+  totalBytes: number;
+  reason?: string;
 };
 
 export type ErrorEvent = {
   uploadId?: string;
   downloadId?: string;
   error: string;
+  code?: string;
+  details?: Record<string, any>;
 };
 
 export type DebugEvent = {
   message: string;
+  level: "info" | "warn" | "error" | "debug";
+  timestamp: number;
+  details?: Record<string, any>;
 };
 
 export type ChangeEventPayload = {
