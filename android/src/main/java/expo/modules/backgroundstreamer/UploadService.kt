@@ -20,205 +20,306 @@ import com.facebook.react.bridge.ReactApplicationContext
 import okio.BufferedSink
 import java.util.concurrent.TimeUnit
 import java.io.FileOutputStream
+import expo.modules.kotlin.modules.Module
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 
-class UploadService(private val reactContext: ReactApplicationContext) {
+class UploadService(
+    private val reactContext: ReactApplicationContext,
+    private val module: Module
+) {
+    private val TAG = "UploadService"
     private val executor = Executors.newCachedThreadPool()
-    private val activeUploads = mutableMapOf<String, Call>()
-    private val activeDownloads = mutableMapOf<String, Call>()
+    private val activeUploads = mutableMapOf<String, UploadTask>()
+    private val activeDownloads = mutableMapOf<String, DownloadTask>()
+    private val uploadProgress = mutableMapOf<String, Pair<Long, Long>>() // uploadId -> (bytesWritten, totalBytes)
+    private val downloadProgress = mutableMapOf<String, Pair<Long, Long>>() // downloadId -> (bytesWritten, totalBytes)
     private val uploadIdCounter = AtomicInteger(0)
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
-    private val observer = GlobalStreamObserver(reactContext)
 
     fun startUpload(
         uploadId: String,
         url: String,
         filePath: String,
-        headers: Map<String, String> = emptyMap(),
+        headers: Map<String, String>,
         encryptionKey: String,
         encryptionNonce: String
     ) {
-        Log.d("UploadService", "Starting upload: $uploadId, url: $url, path: $filePath")
-        val file = File(filePath)
-        if (!file.exists()) {
-            Log.e("UploadService", "File not found: $filePath")
-            observer.onUploadError(uploadId, "File not found: $filePath")
-            return
-        }
-
-        val requestBody = object : RequestBody() {
-            override fun contentType(): MediaType? = "application/octet-stream".toMediaType()
-
-            override fun contentLength(): Long = file.length()
-
-            override fun writeTo(sink: BufferedSink) {
-                try {
-                    Log.d("UploadService", "Starting file upload, size: ${file.length()}")
-                    file.inputStream().use { input ->
-                        val stream = if (encryptionKey.isNotEmpty() && encryptionNonce.isNotEmpty()) {
-                            // Create encrypted input stream
-                            val keyBytes = Base64.getDecoder().decode(encryptionKey)
-                            val nonceBytes = Base64.getDecoder().decode(encryptionNonce)
-                            EncryptedInputStream(input, keyBytes, nonceBytes)
-                        } else {
-                            input
-                        }
-                        
-                        val buffer = ByteArray(16384)
-                        var bytesRead: Int
-                        var totalBytesRead = 0L
-                        while (stream.read(buffer).also { bytesRead = it } != -1) {
-                            sink.write(buffer, 0, bytesRead)
-                            totalBytesRead += bytesRead
-                            val progress = (totalBytesRead * 100 / file.length()).toInt()
-                            Log.d("UploadService", "Upload progress: $progress%")
-                            observer.onUploadProgress(uploadId, totalBytesRead, file.length())
-                        }
-                    }
-                    Log.d("UploadService", "File upload completed")
-                } catch (e: Exception) {
-                    Log.e("UploadService", "Error during upload: ${e.message}", e)
-                    throw e
-                }
-            }
-        }
-
-        val request = Request.Builder()
-            .url(url)
-            .post(requestBody)
-            .apply {
-                headers.forEach { (key, value) ->
-                    addHeader(key, value)
-                }
-            }
-            .build()
-
-        val call = client.newCall(request)
-        activeUploads[uploadId] = call
-
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("UploadService", "Upload failed: ${e.message}", e)
-                activeUploads.remove(uploadId)
-                observer.onUploadError(uploadId, e.message ?: "Upload failed")
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                Log.d("UploadService", "Upload response received: ${response.code}")
-                activeUploads.remove(uploadId)
-                response.use {
-                    if (response.isSuccessful) {
-                        val responseBody = response.body?.string() ?: ""
-                        Log.d("UploadService", "Upload completed successfully")
-                        observer.onUploadComplete(uploadId, responseBody, response.code, response.headers.toMap())
-                    } else {
-                        Log.e("UploadService", "Upload failed with status: ${response.code}")
-                        observer.onUploadError(uploadId, "Upload failed with status: ${response.code}")
-                    }
-                }
-            }
-        })
+        val keyBytes = encryptionKey.toByteArray()
+        val nonceBytes = encryptionNonce.toByteArray()
+        val task = UploadTask(
+            uploadId,
+            url,
+            filePath,
+            headers,
+            keyBytes,
+            nonceBytes,
+            module
+        )
+        activeUploads[uploadId] = task
+        executor.execute(task)
     }
 
     fun cancelUpload(uploadId: String) {
-        Log.d("UploadService", "Cancelling upload: $uploadId")
-        activeUploads[uploadId]?.let { call ->
-            if (!call.isCanceled()) {
-                call.cancel()
-            }
-            activeUploads.remove(uploadId)
-        }
+        activeUploads[uploadId]?.cancel()
+        activeUploads.remove(uploadId)
     }
 
     fun startDownload(
         downloadId: String,
         url: String,
         filePath: String,
-        headers: Map<String, String> = emptyMap()
+        headers: Map<String, String>
     ) {
-        Log.d("UploadService", "Starting download: $downloadId, url: $url, path: $filePath")
-        
-        val request = Request.Builder()
-            .url(url)
-            .apply {
-                headers.forEach { (key, value) ->
-                    addHeader(key, value)
-                }
-            }
-            .build()
-
-        val call = client.newCall(request)
-        activeDownloads[downloadId] = call
-
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("UploadService", "Download failed: ${e.message}", e)
-                activeDownloads.remove(downloadId)
-                observer.onDownloadError(downloadId, e.message ?: "Download failed")
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                Log.d("UploadService", "Download response received: ${response.code}")
-                activeDownloads.remove(downloadId)
-                
-                response.use {
-                    if (!response.isSuccessful) {
-                        Log.e("UploadService", "Download failed with status: ${response.code}")
-                        observer.onDownloadError(downloadId, "Download failed with status: ${response.code}")
-                        return
-                    }
-
-                    val body = response.body ?: run {
-                        observer.onDownloadError(downloadId, "Empty response body")
-                        return
-                    }
-
-                    val contentLength = body.contentLength()
-                    var bytesRead = 0L
-
-                    try {
-                        val file = File(filePath)
-                        file.parentFile?.mkdirs()
-                        
-                        FileOutputStream(file).use { output ->
-                            val buffer = ByteArray(8192)
-                            val input = body.byteStream()
-                            
-                            while (true) {
-                                val read = input.read(buffer)
-                                if (read == -1) break
-                                
-                                output.write(buffer, 0, read)
-                                bytesRead += read
-                                
-                                val progress = (bytesRead * 100 / contentLength).toInt()
-                                observer.onDownloadProgress(downloadId, bytesRead, contentLength)
-                            }
-                        }
-                        
-                        Log.d("UploadService", "Download completed successfully")
-                        val mimeType = response.body?.contentType()?.toString() ?: "application/octet-stream"
-                        observer.onDownloadComplete(downloadId, filePath, mimeType)
-                    } catch (e: Exception) {
-                        Log.e("UploadService", "Error saving downloaded file: ${e.message}", e)
-                        observer.onDownloadError(downloadId, "Error saving file: ${e.message}")
-                    }
-                }
-            }
-        })
+        val task = DownloadTask(
+            downloadId,
+            url,
+            filePath,
+            headers,
+            module
+        )
+        activeDownloads[downloadId] = task
+        executor.execute(task)
     }
 
     fun cancelDownload(downloadId: String) {
-        Log.d("UploadService", "Cancelling download: $downloadId")
-        activeDownloads[downloadId]?.let { call ->
-            if (!call.isCanceled()) {
-                call.cancel()
-                activeDownloads.remove(downloadId)
-                observer.onDownloadError(downloadId, "Download cancelled")
+        activeDownloads[downloadId]?.cancel()
+        activeDownloads.remove(downloadId)
+    }
+
+    private inner class UploadTask(
+        private val uploadId: String,
+        private val url: String,
+        private val filePath: String,
+        private val headers: Map<String, String>,
+        private val encryptionKey: ByteArray,
+        private val encryptionNonce: ByteArray,
+        private val module: Module
+    ) : Runnable {
+        private val cancelled = AtomicBoolean(false)
+        private var connection: HttpURLConnection? = null
+
+        override fun run() {
+            try {
+                val file = File(filePath)
+                if (!file.exists()) {
+                    module.sendEvent("error", mapOf(
+                        "uploadId" to uploadId,
+                        "error" to "File does not exist: $filePath"
+                    ))
+                    return
+                }
+
+                val fileSize = file.length()
+                var bytesWritten = 0L
+                var lastProgressUpdate = 0L
+                val progressInterval = 100L // Update progress every 100ms
+
+                val url = URL(url)
+                connection = url.openConnection() as HttpURLConnection
+                connection?.apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 30000
+                    readTimeout = 30000
+
+                    // Add headers
+                    headers.forEach { (key, value) ->
+                        setRequestProperty(key, value)
+                    }
+
+                    // Set content length
+                    setFixedLengthStreamingMode(fileSize)
+                }
+
+                val inputStream: InputStream = if (encryptionKey.isNotEmpty() && encryptionNonce.isNotEmpty()) {
+                    EncryptedInputStream(FileInputStream(file), encryptionKey, encryptionNonce)
+                } else {
+                    FileInputStream(file)
+                }
+
+                connection?.outputStream?.use { output ->
+                    inputStream.use { input ->
+                        val buffer = ByteArray(8192)
+                        var bytes: Int
+                        while (input.read(buffer).also { bytes = it } != -1 && !cancelled.get()) {
+                            output.write(buffer, 0, bytes)
+                            bytesWritten += bytes
+
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastProgressUpdate >= progressInterval) {
+                                module.sendEvent("upload-progress", mapOf(
+                                    "uploadId" to uploadId,
+                                    "progress" to ((bytesWritten * 100) / fileSize).toInt(),
+                                    "bytesWritten" to bytesWritten,
+                                    "totalBytes" to fileSize
+                                ))
+                                lastProgressUpdate = currentTime
+                            }
+                        }
+                    }
+                }
+
+                if (cancelled.get()) {
+                    module.sendEvent("upload-cancelled", mapOf(
+                        "uploadId" to uploadId,
+                        "bytesWritten" to bytesWritten,
+                        "totalBytes" to fileSize
+                    ))
+                    return
+                }
+
+                val responseCode = connection?.responseCode ?: -1
+                val response = connection?.inputStream?.bufferedReader()?.use { it.readText() } ?: ""
+                val responseHeaders = connection?.headerFields?.mapValues { it.value.firstOrNull() ?: "" } ?: mapOf()
+
+                if (responseCode in 200..299) {
+                    module.sendEvent("upload-complete", mapOf(
+                        "uploadId" to uploadId,
+                        "response" to response,
+                        "responseCode" to responseCode,
+                        "responseHeaders" to responseHeaders
+                    ))
+                } else {
+                    module.sendEvent("error", mapOf(
+                        "uploadId" to uploadId,
+                        "error" to "Upload failed with status code: $responseCode",
+                        "code" to "HTTP_ERROR",
+                        "details" to mapOf(
+                            "responseCode" to responseCode,
+                            "response" to response,
+                            "responseHeaders" to responseHeaders
+                        )
+                    ))
+                }
+
+            } catch (e: Exception) {
+                if (!cancelled.get()) {
+                    module.sendEvent("error", mapOf(
+                        "uploadId" to uploadId,
+                        "error" to (e.message ?: "Unknown error"),
+                        "code" to "UPLOAD_ERROR"
+                    ))
+                }
+            } finally {
+                connection?.disconnect()
+                activeUploads.remove(uploadId)
             }
+        }
+
+        fun cancel() {
+            cancelled.set(true)
+            connection?.disconnect()
+        }
+    }
+
+    private inner class DownloadTask(
+        private val downloadId: String,
+        private val url: String,
+        private val filePath: String,
+        private val headers: Map<String, String>,
+        private val module: Module
+    ) : Runnable {
+        private val cancelled = AtomicBoolean(false)
+        private var connection: HttpURLConnection? = null
+
+        override fun run() {
+            try {
+                val url = URL(url)
+                connection = url.openConnection() as HttpURLConnection
+                connection?.apply {
+                    requestMethod = "GET"
+                    connectTimeout = 30000
+                    readTimeout = 30000
+
+                    // Add headers
+                    headers.forEach { (key, value) ->
+                        setRequestProperty(key, value)
+                    }
+                }
+
+                val responseCode = connection?.responseCode ?: -1
+                if (responseCode !in 200..299) {
+                    module.sendEvent("error", mapOf(
+                        "downloadId" to downloadId,
+                        "error" to "Download failed with status code: $responseCode",
+                        "code" to "HTTP_ERROR"
+                    ))
+                    return
+                }
+
+                val contentLength = connection?.contentLength?.toLong() ?: -1L
+                var bytesWritten = 0L
+                var lastProgressUpdate = 0L
+                val progressInterval = 100L // Update progress every 100ms
+
+                val file = File(filePath)
+                file.parentFile?.mkdirs()
+
+                connection?.inputStream?.use { input ->
+                    file.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytes: Int
+                        while (input.read(buffer).also { bytes = it } != -1 && !cancelled.get()) {
+                            output.write(buffer, 0, bytes)
+                            bytesWritten += bytes
+
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastProgressUpdate >= progressInterval && contentLength > 0) {
+                                module.sendEvent("download-progress", mapOf(
+                                    "downloadId" to downloadId,
+                                    "progress" to ((bytesWritten * 100) / contentLength).toInt(),
+                                    "bytesWritten" to bytesWritten,
+                                    "totalBytes" to contentLength
+                                ))
+                                lastProgressUpdate = currentTime
+                            }
+                        }
+                    }
+                }
+
+                if (cancelled.get()) {
+                    module.sendEvent("download-cancelled", mapOf(
+                        "downloadId" to downloadId,
+                        "bytesWritten" to bytesWritten,
+                        "totalBytes" to contentLength
+                    ))
+                    file.delete()
+                    return
+                }
+
+                val mimeType = connection?.contentType ?: "application/octet-stream"
+                module.sendEvent("download-complete", mapOf(
+                    "downloadId" to downloadId,
+                    "filePath" to filePath,
+                    "mimeType" to mimeType,
+                    "totalBytes" to bytesWritten
+                ))
+
+            } catch (e: Exception) {
+                if (!cancelled.get()) {
+                    module.sendEvent("error", mapOf(
+                        "downloadId" to downloadId,
+                        "error" to (e.message ?: "Unknown error"),
+                        "code" to "DOWNLOAD_ERROR"
+                    ))
+                }
+                File(filePath).delete()
+            } finally {
+                connection?.disconnect()
+                activeDownloads.remove(downloadId)
+            }
+        }
+
+        fun cancel() {
+            cancelled.set(true)
+            connection?.disconnect()
         }
     }
 } 

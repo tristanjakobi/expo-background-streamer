@@ -17,6 +17,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import expo.modules.kotlin.exception.CodedException
 import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.modules.core.DeviceEventManagerModule
 
 class UploadOptions : Record {
     @Field
@@ -57,7 +58,6 @@ class ExpoBackgroundStreamerModule : Module() {
     private val activeUploadTasks = mutableMapOf<String, Any>()
     private val activeDownloadTasks = mutableMapOf<String, Any>()
     private var uploadService: UploadService? = null
-    private var observer: GlobalStreamObserver? = null
     
     companion object {
         private const val TAG = "ExpoBackgroundStreamer"
@@ -66,7 +66,7 @@ class ExpoBackgroundStreamerModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ExpoBackgroundStreamer")
 
-        Events("upload-progress", "download-progress", "upload-complete", "download-complete", "error", "debug")
+        Events("upload-progress", "download-progress", "upload-complete", "download-complete", "upload-cancelled", "download-cancelled", "error", "debug")
 
         OnCreate {
             try {
@@ -74,8 +74,7 @@ class ExpoBackgroundStreamerModule : Module() {
                 val reactContext = appContext.reactContext as? ReactApplicationContext
                 if (reactContext != null) {
                     Log.d(TAG, "Initializing services")
-                    uploadService = UploadService(reactContext)
-                    observer = GlobalStreamObserver(reactContext)
+                    uploadService = UploadService(reactContext, this@ExpoBackgroundStreamerModule)
                     Log.d(TAG, "Services initialized successfully")
                 } else {
                     Log.e(TAG, "React context is null")
@@ -88,7 +87,6 @@ class ExpoBackgroundStreamerModule : Module() {
         OnDestroy {
             Log.d(TAG, "Module onDestroy")
             uploadService = null
-            observer = null
         }
 
         AsyncFunction("getFileInfo") { path: String ->
