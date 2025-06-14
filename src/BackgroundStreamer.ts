@@ -12,34 +12,15 @@ interface ExpoBackgroundStreamerModule {
   cancelUpload(uploadId: string): Promise<boolean>;
   startDownload(options: DownloadOptions): Promise<string>;
   cancelDownload(downloadId: string): Promise<boolean>;
+  addListener<T extends keyof ExpoBackgroundStreamerModuleEvents>(
+    eventName: T,
+    listener: ExpoBackgroundStreamerModuleEvents[T]
+  ): any;
 }
 
 const module = requireNativeModule<ExpoBackgroundStreamerModule>(
   "ExpoBackgroundStreamer"
 );
 
-const listeners = new Map<
-  keyof ExpoBackgroundStreamerModuleEvents,
-  Set<Function>
->();
-
-export default {
-  ...module,
-  addListener: <T extends keyof ExpoBackgroundStreamerModuleEvents>(
-    eventName: T,
-    listener: ExpoBackgroundStreamerModuleEvents[T]
-  ) => {
-    if (!listeners.has(eventName)) {
-      listeners.set(eventName, new Set());
-    }
-    listeners.get(eventName)?.add(listener);
-
-    return {
-      remove: () => {
-        listeners.get(eventName)?.delete(listener);
-      },
-    };
-  },
-};
-
+export default module;
 export * from "./BackgroundStreamer.types";
