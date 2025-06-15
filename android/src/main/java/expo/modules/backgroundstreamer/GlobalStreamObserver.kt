@@ -7,99 +7,136 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.File
+import expo.modules.core.ExpoModule
+import expo.modules.core.errors.CodedException
+import expo.modules.kotlin.exception.CodedException
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 
-class GlobalStreamObserver(private val reactContext: ReactApplicationContext) {
-    private val TAG = "GlobalStreamObserver"
-    private val eventEmitter = reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-    private val startTimes = mutableMapOf<String, Long>()
+object GlobalStreamObserver {
+    private var eventEmitter: Module? = null
+    private val startTimes = ConcurrentHashMap<String, Long>()
+    private const val TAG = "GlobalStreamObserver"
 
-    fun onUploadProgress(uploadId: String, bytesWritten: Long, totalBytes: Long) {
-        val startTime = startTimes[uploadId] ?: System.currentTimeMillis()
-        startTimes[uploadId] = startTime
-        
-        val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        val speed = if (duration > 0) bytesWritten / duration else 0.0
-        val remainingBytes = totalBytes - bytesWritten
-        val estimatedTimeRemaining = if (speed > 0) remainingBytes / speed else 0.0
-        
-        val params = Arguments.createMap().apply {
-            putString("uploadId", uploadId)
-            putInt("progress", ((bytesWritten * 100) / totalBytes).toInt())
-            putDouble("bytesWritten", bytesWritten.toDouble())
-            putDouble("totalBytes", totalBytes.toDouble())
-            putDouble("speed", speed)
-            putDouble("estimatedTimeRemaining", estimatedTimeRemaining)
-        }
-        sendEvent("upload-progress", params)
+    fun setEventEmitter(module: Module) {
+        eventEmitter = module
     }
 
-    fun onUploadComplete(uploadId: String, response: String, responseCode: Int, responseHeaders: Map<String, String>) {
-        val startTime = startTimes.remove(uploadId) ?: System.currentTimeMillis()
-        val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        
-        val params = Arguments.createMap().apply {
-            putString("uploadId", uploadId)
-            putString("response", response)
-            putInt("responseCode", responseCode)
-            putMap("responseHeaders", Arguments.makeNativeMap(responseHeaders))
-            putDouble("duration", duration)
-        }
-        sendEvent("upload-complete", params)
+    fun clearEventEmitter() {
+        eventEmitter = null
     }
 
-    fun onUploadError(uploadId: String, error: String, code: String? = null, details: Map<String, Any>? = null) {
-        val params = Arguments.createMap().apply {
-            putString("uploadId", uploadId)
-            putString("error", error)
-            code?.let { putString("code", it) }
-            details?.let { putMap("details", Arguments.makeNativeMap(it)) }
+    fun onUploadProgress(uploadId: String, bytesWritten: Long, contentLength: Long) {
+        try {
+            val startTime = startTimes.getOrPut(uploadId) { System.currentTimeMillis() }
+            val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+            val speed = if (elapsedTime > 0) (bytesWritten / elapsedTime).roundToInt() else 0
+            val progress = if (contentLength > 0) (bytesWritten * 100.0 / contentLength).roundToInt() else 0
+
+            val event = mapOf(
+                "type" to "uploadProgress",
+                "uploadId" to uploadId,
+                "bytesWritten" to bytesWritten,
+                "contentLength" to contentLength,
+                "speed" to speed,
+                "progress" to progress
+            )
+
+            eventEmitter?.sendEvent("onUploadProgress", event)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending upload progress event: ${e.message}")
         }
-        sendEvent("error", params)
     }
 
-    fun onDownloadProgress(downloadId: String, bytesWritten: Long, totalBytes: Long) {
-        val startTime = startTimes[downloadId] ?: System.currentTimeMillis()
-        startTimes[downloadId] = startTime
-        
-        val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        val speed = if (duration > 0) bytesWritten / duration else 0.0
-        val remainingBytes = totalBytes - bytesWritten
-        val estimatedTimeRemaining = if (speed > 0) remainingBytes / speed else 0.0
-        
-        val params = Arguments.createMap().apply {
-            putString("downloadId", downloadId)
-            putInt("progress", ((bytesWritten * 100) / totalBytes).toInt())
-            putDouble("bytesWritten", bytesWritten.toDouble())
-            putDouble("totalBytes", totalBytes.toDouble())
-            putDouble("speed", speed)
-            putDouble("estimatedTimeRemaining", estimatedTimeRemaining)
+    fun onUploadComplete(uploadId: String, responseCode: Int, responseBody: String) {
+        try {
+            val startTime = startTimes.remove(uploadId) ?: System.currentTimeMillis()
+            val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+
+            val event = mapOf(
+                "type" to "uploadComplete",
+                "uploadId" to uploadId,
+                "responseCode" to responseCode,
+                "responseBody" to responseBody,
+                "elapsedTime" to elapsedTime
+            )
+
+            eventEmitter?.sendEvent("onUploadComplete", event)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending upload complete event: ${e.message}")
         }
-        sendEvent("download-progress", params)
     }
 
-    fun onDownloadComplete(downloadId: String, filePath: String, mimeType: String) {
-        val startTime = startTimes.remove(downloadId) ?: System.currentTimeMillis()
-        val duration = (System.currentTimeMillis() - startTime) / 1000.0
-        val file = File(filePath)
-        
-        val params = Arguments.createMap().apply {
-            putString("downloadId", downloadId)
-            putString("filePath", filePath)
-            putString("mimeType", mimeType)
-            putDouble("totalBytes", file.length().toDouble())
-            putDouble("duration", duration)
+    fun onUploadError(uploadId: String, error: String) {
+        try {
+            startTimes.remove(uploadId)
+            val event = mapOf(
+                "type" to "uploadError",
+                "uploadId" to uploadId,
+                "error" to error
+            )
+
+            eventEmitter?.sendEvent("onUploadError", event)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending upload error event: ${e.message}")
         }
-        sendEvent("download-complete", params)
     }
 
-    fun onDownloadError(downloadId: String, error: String, code: String? = null, details: Map<String, Any>? = null) {
-        val params = Arguments.createMap().apply {
-            putString("downloadId", downloadId)
-            putString("error", error)
-            code?.let { putString("code", it) }
-            details?.let { putMap("details", Arguments.makeNativeMap(it)) }
+    fun onDownloadProgress(downloadId: String, bytesRead: Long, contentLength: Long) {
+        try {
+            val startTime = startTimes.getOrPut(downloadId) { System.currentTimeMillis() }
+            val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+            val speed = if (elapsedTime > 0) (bytesRead / elapsedTime).roundToInt() else 0
+            val progress = if (contentLength > 0) (bytesRead * 100.0 / contentLength).roundToInt() else 0
+
+            val event = mapOf(
+                "type" to "downloadProgress",
+                "downloadId" to downloadId,
+                "bytesRead" to bytesRead,
+                "contentLength" to contentLength,
+                "speed" to speed,
+                "progress" to progress
+            )
+
+            eventEmitter?.sendEvent("onDownloadProgress", event)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending download progress event: ${e.message}")
         }
-        sendEvent("error", params)
+    }
+
+    fun onDownloadComplete(downloadId: String, filePath: String) {
+        try {
+            val startTime = startTimes.remove(downloadId) ?: System.currentTimeMillis()
+            val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+
+            val event = mapOf(
+                "type" to "downloadComplete",
+                "downloadId" to downloadId,
+                "filePath" to filePath,
+                "elapsedTime" to elapsedTime
+            )
+
+            eventEmitter?.sendEvent("onDownloadComplete", event)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending download complete event: ${e.message}")
+        }
+    }
+
+    fun onDownloadError(downloadId: String, error: String) {
+        try {
+            startTimes.remove(downloadId)
+            val event = mapOf(
+                "type" to "downloadError",
+                "downloadId" to downloadId,
+                "error" to error
+            )
+
+            eventEmitter?.sendEvent("onDownloadError", event)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending download error event: ${e.message}")
+        }
     }
 
     fun onDebug(message: String, level: String = "info", details: Map<String, Any>? = null) {
@@ -113,8 +150,19 @@ class GlobalStreamObserver(private val reactContext: ReactApplicationContext) {
     }
 
     private fun sendEvent(eventName: String, params: WritableMap) {
-        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit(eventName, params)
+        try {
+            Log.d(TAG, "Sending event: $eventName")
+            if (eventEmitter != null) {
+                eventEmitter.emit(eventName, params)
+                Log.d(TAG, "Event sent successfully: $eventName")
+            } else {
+                Log.e(TAG, "Event emitter is null")
+                throw CodedException("ERROR", "Event emitter is null", null)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send event: ${e.message}", e)
+            throw CodedException("ERROR", "Failed to send event: ${e.message}", e)
+        }
     }
 }
 

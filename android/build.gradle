@@ -78,4 +78,5 @@ dependencies {
     
     // Kotlin
     implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.0"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:1.9.0"
 }

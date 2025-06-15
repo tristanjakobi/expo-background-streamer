@@ -12,6 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "expo.modules.backgroundstreamer.example"
@@ -23,13 +24,11 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "expo.modules.backgroundstreamer.example",
-      "buildProperties": {
-        "android.packagingOptions.jniLibs.useLegacyPackaging": true,
-        "android.defaultConfig.ndk.pageSize": "16384"
-      }
+      "buildProperties": {}
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": ["expo-file-system"]
   }
 }

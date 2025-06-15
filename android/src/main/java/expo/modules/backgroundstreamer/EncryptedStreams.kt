@@ -5,6 +5,7 @@ import java.io.*
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import java.util.Base64
 
 class EncryptedInputStream(
     private val sourceStream: InputStream,
@@ -20,8 +21,10 @@ class EncryptedInputStream(
         cipher = Cipher.getInstance("AES/CTR/NoPadding")
         val keySpec = SecretKeySpec(key, "AES")
         val ivSpec = IvParameterSpec(nonce)
-        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec)
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
         Log.d(TAG, "Successfully initialized EncryptedInputStream with key length: ${key.size}, nonce length: ${nonce.size}")
+        Log.d(TAG, "Key (base64): ${Base64.getEncoder().encodeToString(key)}")
+        Log.d(TAG, "Nonce (base64): ${Base64.getEncoder().encodeToString(nonce)}")
     }
 
     override fun read(): Int {
@@ -32,11 +35,11 @@ class EncryptedInputStream(
                 return bytesRead
             }
 
-            val encrypted = cipher.update(buffer, 0, bytesRead)
-            System.arraycopy(encrypted, 0, buffer, 0, encrypted.size)
-            bufferLen = encrypted.size
+            val decrypted = cipher.update(buffer, 0, bytesRead)
+            System.arraycopy(decrypted, 0, buffer, 0, decrypted.size)
+            bufferLen = decrypted.size
             bufferPos = 0
-            Log.d(TAG, "Encrypted $bytesRead bytes")
+            Log.d(TAG, "Decrypted $bytesRead bytes to ${decrypted.size} bytes")
         }
 
         return buffer[bufferPos++].toInt() and 0xFF
@@ -49,10 +52,11 @@ class EncryptedInputStream(
                 return bytesRead
             }
 
-            val encrypted = cipher.update(buffer, 0, bytesRead)
-            System.arraycopy(encrypted, 0, buffer, 0, encrypted.size)
-            bufferLen = encrypted.size
+            val decrypted = cipher.update(buffer, 0, bytesRead)
+            System.arraycopy(decrypted, 0, buffer, 0, decrypted.size)
+            bufferLen = decrypted.size
             bufferPos = 0
+            Log.d(TAG, "Decrypted $bytesRead bytes to ${decrypted.size} bytes")
         }
 
         val available = bufferLen - bufferPos
@@ -64,6 +68,14 @@ class EncryptedInputStream(
     }
 
     override fun close() {
+        try {
+            val finalBytes = cipher.doFinal()
+            if (finalBytes.isNotEmpty()) {
+                Log.d(TAG, "Final decryption block: ${finalBytes.size} bytes")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in final decryption: ${e.message}")
+        }
         sourceStream.close()
         Log.d(TAG, "Stream closed")
     }
@@ -91,6 +103,10 @@ class EncryptedOutputStream(
         Log.d(TAG, "Initializing EncryptedOutputStream:")
         Log.d(TAG, "  ➤ original path: $filePath")
         Log.d(TAG, "  ➤ resolved path: $resolvedPath")
+        Log.d(TAG, "  ➤ key length: ${key.size}")
+        Log.d(TAG, "  ➤ nonce length: ${nonce.size}")
+        Log.d(TAG, "  ➤ key (base64): ${Base64.getEncoder().encodeToString(key)}")
+        Log.d(TAG, "  ➤ nonce (base64): ${Base64.getEncoder().encodeToString(nonce)}")
 
         val file = File(resolvedPath)
         if (file.exists()) {
@@ -103,7 +119,7 @@ class EncryptedOutputStream(
         cipher = Cipher.getInstance("AES/CTR/NoPadding")
         val keySpec = SecretKeySpec(key, "AES")
         val ivSpec = IvParameterSpec(nonce)
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
+        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec)
 
         Log.d(TAG, "Successfully initialized")
     }
@@ -116,21 +132,21 @@ class EncryptedOutputStream(
 
     override fun write(b: ByteArray, off: Int, len: Int) {
         Log.d(TAG, "Writing data of size: $len")
-
-        val decrypted = cipher.update(b, off, len)
-        outputStream.write(decrypted)
-
-        val file = File(filePath)
-        val exists = file.exists()
-        val size = file.length()
-
-        Log.d(TAG, "File written:")
-        Log.d(TAG, "  ➤ path: $filePath")
-        Log.d(TAG, "  ➤ exists: $exists")
-        Log.d(TAG, "  ➤ size: $size bytes")
+        val encrypted = cipher.update(b, off, len)
+        outputStream.write(encrypted)
+        Log.d(TAG, "Encrypted $len bytes to ${encrypted.size} bytes")
     }
 
     override fun close() {
+        try {
+            val finalBytes = cipher.doFinal()
+            if (finalBytes.isNotEmpty()) {
+                outputStream.write(finalBytes)
+                Log.d(TAG, "Final encryption block: ${finalBytes.size} bytes")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in final encryption: ${e.message}")
+        }
         Log.d(TAG, "Closing stream")
         outputStream.close()
         Log.d(TAG, "Closed successfully")

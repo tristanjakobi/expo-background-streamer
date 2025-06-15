@@ -1,13 +1,14 @@
 import Foundation
 import CommonCrypto
 
-class EncryptedInputStream: InputStream {
+class EncryptedInputStream: InputStream, StreamDelegate {
     private var cryptor: CCCryptorRef?
     private let sourceStream: InputStream
     private let readBuffer: NSMutableData
     private var internalBuffer: UnsafeMutablePointer<UInt8>
     private var bufferPos: Int
     private var bufferLen: Int
+    private var _delegate: StreamDelegate?
     
     init?(inputStream: InputStream, key: Data, nonce: Data) {
         self.sourceStream = inputStream
@@ -17,6 +18,9 @@ class EncryptedInputStream: InputStream {
         self.bufferLen = 0
         
         super.init(data: Data())
+        
+        // Set self as delegate for source stream
+        sourceStream.delegate = self
         
         let status = CCCryptorCreateWithMode(
             CCOperation(kCCEncrypt),
@@ -44,6 +48,7 @@ class EncryptedInputStream: InputStream {
             CCCryptorRelease(cryptor)
         }
         internalBuffer.deallocate()
+        sourceStream.delegate = nil
     }
     
     override func open() {
@@ -55,6 +60,19 @@ class EncryptedInputStream: InputStream {
         sourceStream.close()
         print("[EncryptedInputStream] Stream closed")
     }
+    
+    // MARK: - StreamDelegate
+    
+    override var delegate: StreamDelegate? {
+        get { return _delegate }
+        set { _delegate = newValue }
+    }
+    
+    func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
+        _delegate?.stream?(self, handle: eventCode)
+    }
+    
+    // MARK: - InputStream Overrides
     
     override func read(_ buffer: UnsafeMutablePointer<UInt8>, maxLength len: Int) -> Int {
         if bufferPos >= bufferLen {
@@ -104,7 +122,27 @@ class EncryptedInputStream: InputStream {
     }
     
     override var hasBytesAvailable: Bool {
-        return true
+        return sourceStream.hasBytesAvailable || bufferPos < bufferLen
+    }
+    
+    override func getBuffer(_ buffer: UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>, length len: UnsafeMutablePointer<Int>) -> Bool {
+        return false
+    }
+    
+    override func schedule(in aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+        sourceStream.schedule(in: aRunLoop, forMode: mode)
+    }
+    
+    override func remove(from aRunLoop: RunLoop, forMode mode: RunLoop.Mode) {
+        sourceStream.remove(from: aRunLoop, forMode: mode)
+    }
+    
+    override func property(forKey key: Stream.PropertyKey) -> Any? {
+        return sourceStream.property(forKey: key)
+    }
+    
+    override func setProperty(_ property: Any?, forKey key: Stream.PropertyKey) -> Bool {
+        return sourceStream.setProperty(property, forKey: key)
     }
 }
 
