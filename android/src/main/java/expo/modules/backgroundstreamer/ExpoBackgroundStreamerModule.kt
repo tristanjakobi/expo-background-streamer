@@ -5,12 +5,10 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 class ExpoBackgroundStreamerModule : Module() {
     private val TAG = "ExpoBackgroundStreamer"
-    private val moduleCoroutineScope = CoroutineScope(appContext.mainQueue)
 
     override fun definition() = ModuleDefinition {
         Name("ExpoBackgroundStreamer")
@@ -18,7 +16,7 @@ class ExpoBackgroundStreamerModule : Module() {
         Events("onUploadProgress", "onUploadComplete", "onUploadError", "onDownloadProgress", "onDownloadComplete", "onDownloadError")
 
         OnCreate {
-            GlobalStreamObserver.setEventEmitter(this)
+            GlobalStreamObserver.setEventEmitter(this@ExpoBackgroundStreamerModule)
         }
 
         OnDestroy {
@@ -26,7 +24,7 @@ class ExpoBackgroundStreamerModule : Module() {
         }
 
         AsyncFunction("startUpload") { options: UploadOptions, promise: Promise ->
-            moduleCoroutineScope.launch {
+            appContext.mainQueue.launch {
                 try {
                     UploadService.startUpload(options)
                     promise.resolve(null)
@@ -46,7 +44,7 @@ class ExpoBackgroundStreamerModule : Module() {
         }
 
         AsyncFunction("startDownload") { options: DownloadOptions, promise: Promise ->
-            moduleCoroutineScope.launch {
+            appContext.mainQueue.launch {
                 try {
                     UploadService.startDownload(options)
                     promise.resolve(null)
@@ -66,19 +64,3 @@ class ExpoBackgroundStreamerModule : Module() {
         }
     }
 }
-
-data class UploadOptions(
-    val url: String,
-    val fileUri: String,
-    val uploadId: String,
-    val headers: Map<String, String> = mapOf(),
-    val encryptionKey: String? = null
-)
-
-data class DownloadOptions(
-    val url: String,
-    val fileUri: String,
-    val downloadId: String,
-    val headers: Map<String, String> = mapOf(),
-    val encryptionKey: String? = null
-)

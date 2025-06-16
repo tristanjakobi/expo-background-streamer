@@ -86,42 +86,14 @@ class EncryptedInputStream(
 }
 
 class EncryptedOutputStream(
-    private val filePath: String,
-    private val key: ByteArray,
+    private val outputStream: OutputStream,
+    private val cipher: Cipher,
     private val nonce: ByteArray
 ) : OutputStream() {
-    private val outputStream: FileOutputStream
-    private val cipher: Cipher
-
     init {
-        val resolvedPath = if (filePath.startsWith("file://")) {
-            filePath.substring(7)
-        } else {
-            filePath
-        }
-
         Log.d(TAG, "Initializing EncryptedOutputStream:")
-        Log.d(TAG, "  ➤ original path: $filePath")
-        Log.d(TAG, "  ➤ resolved path: $resolvedPath")
-        Log.d(TAG, "  ➤ key length: ${key.size}")
         Log.d(TAG, "  ➤ nonce length: ${nonce.size}")
-        Log.d(TAG, "  ➤ key (base64): ${Base64.getEncoder().encodeToString(key)}")
         Log.d(TAG, "  ➤ nonce (base64): ${Base64.getEncoder().encodeToString(nonce)}")
-
-        val file = File(resolvedPath)
-        if (file.exists()) {
-            Log.d(TAG, "File already exists, will be overwritten: $resolvedPath")
-        }
-
-        file.parentFile?.mkdirs()
-        outputStream = FileOutputStream(resolvedPath)
-
-        cipher = Cipher.getInstance("AES/CTR/NoPadding")
-        val keySpec = SecretKeySpec(key, "AES")
-        val ivSpec = IvParameterSpec(nonce)
-        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec)
-
-        Log.d(TAG, "Successfully initialized")
     }
 
     override fun write(b: Int) {
@@ -131,10 +103,8 @@ class EncryptedOutputStream(
     }
 
     override fun write(b: ByteArray, off: Int, len: Int) {
-        Log.d(TAG, "Writing data of size: $len")
         val encrypted = cipher.update(b, off, len)
         outputStream.write(encrypted)
-        Log.d(TAG, "Encrypted $len bytes to ${encrypted.size} bytes")
     }
 
     override fun close() {
@@ -142,14 +112,11 @@ class EncryptedOutputStream(
             val finalBytes = cipher.doFinal()
             if (finalBytes.isNotEmpty()) {
                 outputStream.write(finalBytes)
-                Log.d(TAG, "Final encryption block: ${finalBytes.size} bytes")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in final encryption: ${e.message}")
         }
-        Log.d(TAG, "Closing stream")
         outputStream.close()
-        Log.d(TAG, "Closed successfully")
     }
 
     companion object {

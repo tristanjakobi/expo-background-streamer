@@ -24,7 +24,8 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "expo.modules.backgroundstreamer.example",
-      "buildProperties": {}
+      "buildProperties": {},
+      "enableOnBackInvokedCallback": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

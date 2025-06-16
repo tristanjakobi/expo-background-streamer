@@ -36,29 +36,29 @@ object UploadService {
     private val activeDownloads = mutableMapOf<String, HttpURLConnection>()
 
     suspend fun startUpload(options: UploadOptions) {
+        val file = File(options.fileUri)
+        if (!file.exists()) {
+            throw CodedException("ERR_FILE_NOT_FOUND", "File not found: ${options.fileUri}", null)
+        }
+
+        val connection = URL(options.url).openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.doOutput = true
+        connection.setChunkedStreamingMode(8192)
+
+        options.headers.forEach { (key, value) ->
+            connection.setRequestProperty(key, value)
+        }
+
+        activeUploads[options.uploadId] = connection
+
         try {
-            val file = File(options.fileUri)
-            if (!file.exists()) {
-                throw CodedException("ERR_FILE_NOT_FOUND", "File not found: ${options.fileUri}")
-            }
-
-            val connection = URL(options.url).openConnection() as HttpURLConnection
-            connection.requestMethod = "POST"
-            connection.doOutput = true
-            connection.setChunkedStreamingMode(8192)
-
-            options.headers.forEach { (key, value) ->
-                connection.setRequestProperty(key, value)
-            }
-
-            activeUploads[options.uploadId] = connection
-
             connection.connect()
 
-            val outputStream = if (options.encryptionKey != null) {
-                val key = SecretKeySpec(options.encryptionKey.toByteArray(), "AES")
+            val outputStream = if (options.encryption?.enabled == true) {
+                val key = SecretKeySpec(options.encryption.key.toByteArray(), "AES")
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-                val nonce = ByteArray(12).apply { UUID.randomUUID().toString().toByteArray().copyInto(this) }
+                val nonce = options.encryption.nonce.toByteArray()
                 cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, nonce))
                 EncryptedOutputStream(connection.outputStream, cipher, nonce)
             } else {
@@ -85,11 +85,11 @@ object UploadService {
             if (responseCode in 200..299) {
                 GlobalStreamObserver.onUploadComplete(options.uploadId, responseCode, responseBody)
             } else {
-                throw CodedException("ERR_UPLOAD_FAILED", "Upload failed with response code: $responseCode")
+                throw CodedException("ERR_UPLOAD_FAILED", "Upload failed with response code: $responseCode", null)
             }
         } catch (e: Exception) {
             GlobalStreamObserver.onUploadError(options.uploadId, e.message ?: "Unknown error")
-            throw CodedException("ERR_UPLOAD_START", e)
+            throw CodedException("ERR_UPLOAD_START", e.message ?: "Unknown error", e)
         } finally {
             activeUploads.remove(options.uploadId)?.disconnect()
         }
@@ -100,34 +100,34 @@ object UploadService {
             activeUploads[uploadId]?.disconnect()
             activeUploads.remove(uploadId)
         } catch (e: Exception) {
-            throw CodedException("ERR_UPLOAD_CANCEL", e)
+            throw CodedException("ERR_UPLOAD_CANCEL", e.message ?: "Unknown error", e)
         }
     }
 
     suspend fun startDownload(options: DownloadOptions) {
+        val connection = URL(options.url).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.doInput = true
+
+        options.headers.forEach { (key, value) ->
+            connection.setRequestProperty(key, value)
+        }
+
+        activeDownloads[options.downloadId] = connection
+
         try {
-            val connection = URL(options.url).openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.doInput = true
-
-            options.headers.forEach { (key, value) ->
-                connection.setRequestProperty(key, value)
-            }
-
-            activeDownloads[options.downloadId] = connection
-
             connection.connect()
 
             val contentLength = connection.contentLength.toLong()
             val file = File(options.fileUri)
             file.parentFile?.mkdirs()
 
-            val inputStream = if (options.encryptionKey != null) {
-                val key = SecretKeySpec(options.encryptionKey.toByteArray(), "AES")
+            val inputStream = if (options.encryption?.enabled == true) {
+                val key = SecretKeySpec(options.encryption.key.toByteArray(), "AES")
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-                val nonce = ByteArray(12).apply { UUID.randomUUID().toString().toByteArray().copyInto(this) }
+                val nonce = options.encryption.nonce.toByteArray()
                 cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, nonce))
-                EncryptedInputStream(connection.inputStream, cipher, nonce)
+                EncryptedInputStream(connection.inputStream, options.encryption.key.toByteArray(), nonce)
             } else {
                 connection.inputStream
             }
@@ -149,7 +149,7 @@ object UploadService {
             GlobalStreamObserver.onDownloadComplete(options.downloadId, file.absolutePath)
         } catch (e: Exception) {
             GlobalStreamObserver.onDownloadError(options.downloadId, e.message ?: "Unknown error")
-            throw CodedException("ERR_DOWNLOAD_START", e)
+            throw CodedException("ERR_DOWNLOAD_START", e.message ?: "Unknown error", e)
         } finally {
             activeDownloads.remove(options.downloadId)?.disconnect()
         }
@@ -160,7 +160,7 @@ object UploadService {
             activeDownloads[downloadId]?.disconnect()
             activeDownloads.remove(downloadId)
         } catch (e: Exception) {
-            throw CodedException("ERR_DOWNLOAD_CANCEL", e)
+            throw CodedException("ERR_DOWNLOAD_CANCEL", e.message ?: "Unknown error", e)
         }
     }
 } 
