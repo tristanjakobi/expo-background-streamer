@@ -107,8 +107,8 @@ export interface FileInfo {
 
 export interface EncryptionOptions {
   enabled: boolean;
-  key?: string;
-  nonce?: string;
+  key: string;
+  nonce: string;
 }
 
 export interface CompressionOptions {

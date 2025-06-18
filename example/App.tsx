@@ -25,8 +25,8 @@ const generateEncryptionKeys = async () => {
   const key = await Crypto.getRandomBytesAsync(32);
   const nonce = await Crypto.getRandomBytesAsync(16);
   return {
-    key: Buffer.from(key).toString("base64"),
-    nonce: Buffer.from(nonce).toString("base64"),
+    key: Buffer.from(key).toString("hex"),
+    nonce: Buffer.from(nonce).toString("hex"),
   };
 };
 
@@ -136,13 +136,13 @@ export default function App() {
       const fileInfo = await FileSystem.getInfoAsync(filePath, { size: true });
       addLog(`File size: ${fileInfo.exists ? fileInfo.size : "unknown"} bytes`);
 
-      const uploadUrl = "http://localhost:3000/upload";
+      const uploadUrl = "http://10.0.2.2:3000/upload";
       const keys = await generateEncryptionKeys();
       setEncryptionKeys(keys);
 
       addLog(`Encryption enabled: true`);
-      addLog(`Key length: ${Buffer.from(keys.key, "base64").length} bytes`);
-      addLog(`Nonce length: ${Buffer.from(keys.nonce, "base64").length} bytes`);
+      addLog(`Key length: ${Buffer.from(keys.key, "hex").length} bytes`);
+      addLog(`Nonce length: ${Buffer.from(keys.nonce, "hex").length} bytes`);
 
       const options: UploadOptions = {
         url: uploadUrl,
@@ -182,7 +182,7 @@ export default function App() {
       addLog("Starting test download...");
       setStatus("Starting download...");
 
-      const downloadUrl = "http://localhost:3000/download";
+      const downloadUrl = "http://10.0.2.2:3000/download";
       const dataDir = `${FileSystem.documentDirectory}data/`;
       const dirInfo = await FileSystem.getInfoAsync(dataDir);
 
@@ -201,10 +201,10 @@ export default function App() {
 
       addLog(`Using existing encryption keys`);
       addLog(
-        `Key length: ${Buffer.from(encryptionKeys.key, "base64").length} bytes`
+        `Key length: ${Buffer.from(encryptionKeys.key, "hex").length} bytes`
       );
       addLog(
-        `Nonce length: ${Buffer.from(encryptionKeys.nonce, "base64").length} bytes`
+        `Nonce length: ${Buffer.from(encryptionKeys.nonce, "hex").length} bytes`
       );
 
       const downloadId = await ExpoBackgroundStreamer.startDownload({
