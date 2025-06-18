@@ -1,3 +1,5 @@
+import type { EventSubscription } from "expo-modules-core";
+
 export type OnLoadEventPayload = {
   url: string;
 };

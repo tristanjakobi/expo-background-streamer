@@ -33,6 +33,10 @@ const generateEncryptionKeys = async () => {
 export default function App() {
   const [status, setStatus] = useState("Initializing...");
   const [logs, setLogs] = useState<string[]>([]);
+  const [activeTransfers, setActiveTransfers] = useState<{
+    uploads: Record<string, string>;
+    downloads: Record<string, string>;
+  }>({ uploads: {}, downloads: {} });
   const [encryptionKeys, setEncryptionKeys] = useState<{
     key: string;
     nonce: string;
@@ -42,6 +46,27 @@ export default function App() {
     console.log(message);
     setLogs((prev) => [...prev, `${new Date().toISOString()}: ${message}`]);
   };
+
+  // Monitor active transfers
+  useEffect(() => {
+    const checkActiveTransfers = async () => {
+      try {
+        const allTransfers =
+          await ExpoBackgroundStreamer.getAllActiveTransfers();
+        setActiveTransfers(allTransfers);
+      } catch (error) {
+        // Silently fail - don't spam logs
+      }
+    };
+
+    // Check immediately
+    checkActiveTransfers();
+
+    // Then check every 2 seconds
+    const interval = setInterval(checkActiveTransfers, 100);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     try {
@@ -243,12 +268,88 @@ export default function App() {
     }
   };
 
+  const testTransferStatus = async () => {
+    try {
+      addLog("Getting transfer status...");
+
+      // Get all active transfers
+      const allTransfers = await ExpoBackgroundStreamer.getAllActiveTransfers();
+      addLog(`All active transfers: ${JSON.stringify(allTransfers)}`);
+
+      // Get active uploads specifically
+      const activeUploads = await ExpoBackgroundStreamer.getActiveUploads();
+      addLog(`Active uploads: ${JSON.stringify(activeUploads)}`);
+
+      // Get active downloads specifically
+      const activeDownloads = await ExpoBackgroundStreamer.getActiveDownloads();
+      addLog(`Active downloads: ${JSON.stringify(activeDownloads)}`);
+
+      // Check status of specific transfer (if any)
+      const uploadKeys = Object.keys(activeUploads);
+      if (uploadKeys.length > 0) {
+        const uploadStatus = await ExpoBackgroundStreamer.getUploadStatus(
+          uploadKeys[0]
+        );
+        addLog(`Upload ${uploadKeys[0]} status: ${uploadStatus}`);
+      }
+
+      const downloadKeys = Object.keys(activeDownloads);
+      if (downloadKeys.length > 0) {
+        const downloadStatus = await ExpoBackgroundStreamer.getDownloadStatus(
+          downloadKeys[0]
+        );
+        addLog(`Download ${downloadKeys[0]} status: ${downloadStatus}`);
+      }
+
+      if (uploadKeys.length === 0 && downloadKeys.length === 0) {
+        addLog("No active transfers found");
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      addLog(`Transfer status error: ${errorMessage}`);
+      Alert.alert("Transfer Status Error", errorMessage);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.container}>
         <Text style={styles.header}>Background Streamer Example</Text>
         <View style={styles.group}>
           <Text style={styles.status}>{status}</Text>
+
+          {/* Active Transfers Display */}
+          <View style={styles.transfersContainer}>
+            <Text style={styles.sectionHeader}>Active Transfers:</Text>
+            {Object.keys(activeTransfers.uploads).length > 0 && (
+              <View>
+                <Text style={styles.transferType}>📤 Uploads:</Text>
+                {Object.entries(activeTransfers.uploads).map(([id, status]) => (
+                  <Text key={id} style={styles.transferItem}>
+                    • {id.substring(0, 8)}... ({status})
+                  </Text>
+                ))}
+              </View>
+            )}
+            {Object.keys(activeTransfers.downloads).length > 0 && (
+              <View>
+                <Text style={styles.transferType}>📥 Downloads:</Text>
+                {Object.entries(activeTransfers.downloads).map(
+                  ([id, status]) => (
+                    <Text key={id} style={styles.transferItem}>
+                      • {id.substring(0, 8)}... ({status})
+                    </Text>
+                  )
+                )}
+              </View>
+            )}
+            {Object.keys(activeTransfers.uploads).length === 0 &&
+              Object.keys(activeTransfers.downloads).length === 0 && (
+                <Text style={styles.noTransfers}>No active transfers</Text>
+              )}
+          </View>
+
           <View style={styles.buttonContainer}>
             <Button
               title="Test Upload"
@@ -306,5 +407,26 @@ const styles = {
     flexDirection: "row" as const,
     justifyContent: "space-around" as const,
     marginBottom: 20,
+  },
+  transfersContainer: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: "bold" as const,
+    marginBottom: 10,
+  },
+  transferType: {
+    fontSize: 16,
+    fontWeight: "bold" as const,
+    marginBottom: 5,
+  },
+  transferItem: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  noTransfers: {
+    fontSize: 14,
+    textAlign: "center" as const,
   },
 };

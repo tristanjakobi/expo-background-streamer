@@ -49,6 +49,18 @@ class BackgroundUploadService : Service() {
             }
             context.startService(intent)
         }
+        
+        fun getActiveUploads(): Map<String, String> {
+            return activeUploads.keys.associateWith { "uploading" }
+        }
+        
+        fun getUploadStatus(uploadId: String): String? {
+            return if (activeUploads.containsKey(uploadId)) {
+                "uploading"
+            } else {
+                null
+            }
+        }
     }
     
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())

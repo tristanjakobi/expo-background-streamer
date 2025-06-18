@@ -12,6 +12,14 @@ interface ExpoBackgroundStreamerModule {
   cancelUpload(uploadId: string): Promise<boolean>;
   startDownload(options: DownloadOptions): Promise<string>;
   cancelDownload(downloadId: string): Promise<boolean>;
+  getActiveUploads(): Promise<Record<string, string>>;
+  getActiveDownloads(): Promise<Record<string, string>>;
+  getUploadStatus(uploadId: string): Promise<string | null>;
+  getDownloadStatus(downloadId: string): Promise<string | null>;
+  getAllActiveTransfers(): Promise<{
+    uploads: Record<string, string>;
+    downloads: Record<string, string>;
+  }>;
   addListener<T extends keyof ExpoBackgroundStreamerModuleEvents>(
     eventName: T,
     listener: ExpoBackgroundStreamerModuleEvents[T]

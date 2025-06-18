@@ -155,5 +155,57 @@ class ExpoBackgroundStreamerModule : Module() {
                 promise.reject("ERR_DOWNLOAD_CANCEL", e.message ?: "Failed to cancel download", e)
             }
         }
+
+        AsyncFunction("getActiveUploads") { promise: Promise ->
+            try {
+                val activeUploads = BackgroundUploadService.getActiveUploads()
+                promise.resolve(activeUploads)
+            } catch (e: Exception) {
+                promise.reject("ERR_GET_ACTIVE_UPLOADS", e.message ?: "Failed to get active uploads", e)
+            }
+        }
+
+        AsyncFunction("getActiveDownloads") { promise: Promise ->
+            try {
+                val activeDownloads = UploadService.getActiveDownloads()
+                promise.resolve(activeDownloads)
+            } catch (e: Exception) {
+                promise.reject("ERR_GET_ACTIVE_DOWNLOADS", e.message ?: "Failed to get active downloads", e)
+            }
+        }
+
+        AsyncFunction("getUploadStatus") { uploadId: String, promise: Promise ->
+            try {
+                val status = BackgroundUploadService.getUploadStatus(uploadId)
+                promise.resolve(status)
+            } catch (e: Exception) {
+                promise.reject("ERR_GET_UPLOAD_STATUS", e.message ?: "Failed to get upload status", e)
+            }
+        }
+
+        AsyncFunction("getDownloadStatus") { downloadId: String, promise: Promise ->
+            try {
+                val status = UploadService.getDownloadStatus(downloadId)
+                promise.resolve(status)
+            } catch (e: Exception) {
+                promise.reject("ERR_GET_DOWNLOAD_STATUS", e.message ?: "Failed to get download status", e)
+            }
+        }
+
+        AsyncFunction("getAllActiveTransfers") { promise: Promise ->
+            try {
+                val activeUploads = BackgroundUploadService.getActiveUploads()
+                val activeDownloads = UploadService.getActiveDownloads()
+                
+                val allTransfers = mapOf(
+                    "uploads" to activeUploads,
+                    "downloads" to activeDownloads
+                )
+                
+                promise.resolve(allTransfers)
+            } catch (e: Exception) {
+                promise.reject("ERR_GET_ALL_TRANSFERS", e.message ?: "Failed to get all transfers", e)
+            }
+        }
     }
 }

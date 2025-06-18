@@ -457,6 +457,32 @@ public class ExpoBackgroundStreamerModule: Module {
             throw error
         }
       }
+
+      Function("getActiveUploads") { () -> [String: String] in
+        return Dictionary(uniqueKeysWithValues: self.activeUploadTasks.keys.map { ($0, "uploading") })
+      }
+
+      Function("getActiveDownloads") { () -> [String: String] in
+        return Dictionary(uniqueKeysWithValues: self.activeDownloadTasks.keys.map { ($0, "downloading") })
+      }
+
+      Function("getUploadStatus") { (uploadId: String) -> String? in
+        return self.activeUploadTasks[uploadId] != nil ? "uploading" : nil
+      }
+
+      Function("getDownloadStatus") { (downloadId: String) -> String? in
+        return self.activeDownloadTasks[downloadId] != nil ? "downloading" : nil
+      }
+
+      Function("getAllActiveTransfers") { () -> [String: Any] in
+        let uploads = Dictionary(uniqueKeysWithValues: self.activeUploadTasks.keys.map { ($0, "uploading") })
+        let downloads = Dictionary(uniqueKeysWithValues: self.activeDownloadTasks.keys.map { ($0, "downloading") })
+        
+        return [
+          "uploads": uploads,
+          "downloads": downloads
+        ]
+      }
     
   }
 }

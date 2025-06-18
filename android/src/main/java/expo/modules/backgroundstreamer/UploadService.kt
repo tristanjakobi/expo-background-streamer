@@ -250,4 +250,16 @@ object UploadService {
             throw CodedException("ERR_DOWNLOAD_CANCEL", e.message ?: "Unknown error", e)
         }
     }
+
+    fun getActiveDownloads(): Map<String, String> {
+        return activeDownloads.keys.associateWith { "downloading" }
+    }
+    
+    fun getDownloadStatus(downloadId: String): String? {
+        return if (activeDownloads.containsKey(downloadId)) {
+            "downloading"
+        } else {
+            null
+        }
+    }
 } 
