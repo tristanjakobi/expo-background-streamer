@@ -14,8 +14,7 @@ data class UploadOptions(
     val encryption: EncryptionOptions? = null,
     val compression: CompressionOptions? = null
 ) : Record, Serializable {
-    val uploadId: String
-        get() = customTransferId ?: UUID.randomUUID().toString()
+    val uploadId: String = customTransferId ?: UUID.randomUUID().toString()
 }
 
 data class DownloadOptions(
@@ -28,8 +27,7 @@ data class DownloadOptions(
     val encryption: EncryptionOptions? = null,
     val compression: CompressionOptions? = null
 ) : Record, Serializable {
-    val downloadId: String
-        get() = customTransferId ?: UUID.randomUUID().toString()
+    val downloadId: String = customTransferId ?: UUID.randomUUID().toString()
 }
 
 data class EncryptionOptions(

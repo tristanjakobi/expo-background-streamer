@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileInputStream
+import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.crypto.Cipher
@@ -37,11 +38,8 @@ class BackgroundUploadService : Service() {
                 putExtra(EXTRA_UPLOAD_OPTIONS, options)
             }
             
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // Start as regular service first to avoid foreground service restrictions
+            context.startService(intent)
         }
         
         fun cancelUpload(context: Context, uploadId: String) {
@@ -132,15 +130,24 @@ class BackgroundUploadService : Service() {
     private fun handleStartUpload(options: UploadOptions) {
         Log.d(TAG, "Starting upload: ${options.uploadId}")
         
-        // Start foreground service
-        val notification = createNotification("Upload Starting", "Preparing to upload file...")
-        startForeground(NOTIFICATION_ID, notification)
+        // Try to start foreground service, but handle the case where it's not allowed
+        try {
+            val notification = createNotification("Upload Starting", "Preparing to upload file...")
+            startForeground(NOTIFICATION_ID, notification)
+            Log.d(TAG, "Successfully started as foreground service")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not start as foreground service: ${e.message}")
+            // Continue as regular service - upload will still work but may be killed by system
+        }
         
         val uploadJob = serviceScope.launch {
+            Log.d(TAG, "Upload coroutine started for ${options.uploadId}")
             try {
+                Log.d(TAG, "About to call performUpload...")
                 performUpload(options)
+                Log.d(TAG, "performUpload completed successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Upload failed: ${e.message}", e)
+                Log.e(TAG, "Upload failed: ${e.javaClass.simpleName}: ${e.message}", e)
                 GlobalStreamObserver.onUploadError(options.uploadId, e.message ?: "Unknown error")
             } finally {
                 activeUploads.remove(options.uploadId)
@@ -148,13 +155,20 @@ class BackgroundUploadService : Service() {
                 
                 // If no more active uploads, stop the service
                 if (activeUploads.isEmpty()) {
-                    stopForeground(true)
+                    try {
+                        stopForeground(true)
+                    } catch (e: Exception) {
+                        // Service might not be foreground
+                        Log.d(TAG, "Could not stop foreground: ${e.message}")
+                    }
                     stopSelf()
                 }
             }
         }
         
+        Log.d(TAG, "Adding upload ${options.uploadId} to activeUploads")
         activeUploads[options.uploadId] = uploadJob
+        Log.d(TAG, "activeUploads now contains: ${activeUploads.keys}")
     }
     
     private fun handleCancelUpload(uploadId: String) {
@@ -174,29 +188,42 @@ class BackgroundUploadService : Service() {
     }
     
     private suspend fun performUpload(options: UploadOptions) {
+        Log.d(TAG, "performUpload started for ${options.uploadId}")
+        Log.d(TAG, "Upload URL: ${options.url}")
+        Log.d(TAG, "File path: ${options.path}")
+        
         val file = File(options.path)
+        Log.d(TAG, "File exists: ${file.exists()}, size: ${file.length()}")
+        
         if (!file.exists()) {
+            Log.e(TAG, "File not found: ${options.path}")
             throw CodedException("ERR_FILE_NOT_FOUND", "File not found: ${options.path}", null)
         }
         
+        Log.d(TAG, "Creating HTTP connection to ${options.url}")
         val connection = URL(options.url).openConnection() as HttpURLConnection
         activeConnections[options.uploadId] = connection
         
         try {
+            Log.d(TAG, "Configuring connection...")
             connection.requestMethod = options.method
             connection.doOutput = true
             connection.setChunkedStreamingMode(8192)
             
+            Log.d(TAG, "Setting headers...")
             options.headers.forEach { (key, value) ->
+                Log.d(TAG, "Header: $key = $value")
                 connection.setRequestProperty(key, value)
             }
             
             // Update notification
-            val notification = createNotification("Uploading", "Connecting to server...")
             val notificationManager = getSystemService(NotificationManager::class.java)
+            val notification = createNotification("Uploading", "Connecting to server...")
             notificationManager.notify(NOTIFICATION_ID, notification)
             
+            Log.d(TAG, "Attempting to connect...")
             connection.connect()
+            Log.d(TAG, "Connected successfully!")
             
             val outputStream = if (options.encryption?.enabled == true) {
                 setupEncryptedOutputStream(connection, options.encryption)
@@ -212,7 +239,12 @@ class BackgroundUploadService : Service() {
                 var bytesRead: Int
                 while (input.read(buffer).also { bytesRead = it } != -1) {
                     // Check if upload was cancelled
+                    Log.d(TAG, "Checking activeUploads for ${options.uploadId}")
+                    Log.d(TAG, "activeUploads contains: ${activeUploads.keys}")
+                    Log.d(TAG, "Contains key? ${activeUploads.containsKey(options.uploadId)}")
+                    
                     if (!activeUploads.containsKey(options.uploadId)) {
+                        Log.e(TAG, "Upload ${options.uploadId} not found in activeUploads, cancelling")
                         throw CodedException("ERR_UPLOAD_CANCELLED", "Upload was cancelled", null)
                     }
                     

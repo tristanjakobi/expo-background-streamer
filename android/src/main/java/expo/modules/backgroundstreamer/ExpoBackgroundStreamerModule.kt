@@ -74,7 +74,8 @@ class ExpoBackgroundStreamerModule : Module() {
 
                 // Start the background service instead of a coroutine
                 try {
-                    BackgroundUploadService.startUpload(appContext.reactContext ?: appContext.applicationContext, options)
+                    val context = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "React context not available", null)
+                    BackgroundUploadService.startUpload(context, options)
                     Log.d(TAG, "Background upload service started successfully")
                     promise.resolve(options.uploadId)
                 } catch (e: Exception) {
@@ -89,7 +90,8 @@ class ExpoBackgroundStreamerModule : Module() {
 
         AsyncFunction("cancelUpload") { uploadId: String, promise: Promise ->
             try {
-                BackgroundUploadService.cancelUpload(appContext.reactContext ?: appContext.applicationContext, uploadId)
+                val context = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "React context not available", null)
+                BackgroundUploadService.cancelUpload(context, uploadId)
                 promise.resolve(null)
             } catch (e: Exception) {
                 promise.reject("ERR_UPLOAD_CANCEL", e.message ?: "Failed to cancel upload", e)

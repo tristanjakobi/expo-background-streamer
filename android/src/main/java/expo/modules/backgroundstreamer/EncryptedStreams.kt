@@ -3,7 +3,7 @@ package expo.modules.backgroundstreamer
 import android.util.Log
 import java.io.*
 import javax.crypto.Cipher
-import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import java.util.Base64
 
@@ -12,72 +12,57 @@ class EncryptedInputStream(
     private val key: ByteArray,
     private val nonce: ByteArray
 ) : InputStream() {
-    private val cipher: Cipher
-    private val buffer = ByteArray(4096)
-    private var bufferPos = 0
-    private var bufferLen = 0
+    private val decryptedData: ByteArray
+    private var position = 0
 
     init {
-        cipher = Cipher.getInstance("AES/CTR/NoPadding")
+        Log.d(TAG, "Reading and decrypting entire stream with key length: ${key.size}, nonce length: ${nonce.size}")
+        
+        // Read all encrypted data first
+        val encryptedData = sourceStream.readBytes()
+        Log.d(TAG, "Read ${encryptedData.size} bytes of encrypted data")
+        
+        // Decrypt all at once (GCM requires this)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         val keySpec = SecretKeySpec(key, "AES")
-        val ivSpec = IvParameterSpec(nonce)
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
-        Log.d(TAG, "Successfully initialized EncryptedInputStream with key length: ${key.size}, nonce length: ${nonce.size}")
-        Log.d(TAG, "Key (base64): ${Base64.getEncoder().encodeToString(key)}")
-        Log.d(TAG, "Nonce (base64): ${Base64.getEncoder().encodeToString(nonce)}")
+        val gcmSpec = GCMParameterSpec(128, nonce)
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
+        
+        decryptedData = cipher.doFinal(encryptedData)
+        Log.d(TAG, "Successfully decrypted ${encryptedData.size} bytes to ${decryptedData.size} bytes")
+        
+        sourceStream.close()
     }
 
     override fun read(): Int {
-        if (bufferPos >= bufferLen) {
-            val bytesRead = sourceStream.read(buffer)
-            if (bytesRead <= 0) {
-                Log.d(TAG, "No more data to read or error occurred")
-                return bytesRead
-            }
-
-            val decrypted = cipher.update(buffer, 0, bytesRead)
-            System.arraycopy(decrypted, 0, buffer, 0, decrypted.size)
-            bufferLen = decrypted.size
-            bufferPos = 0
-            Log.d(TAG, "Decrypted $bytesRead bytes to ${decrypted.size} bytes")
+        return if (position < decryptedData.size) {
+            decryptedData[position++].toInt() and 0xFF
+        } else {
+            -1
         }
-
-        return buffer[bufferPos++].toInt() and 0xFF
     }
 
     override fun read(b: ByteArray, off: Int, len: Int): Int {
-        if (bufferPos >= bufferLen) {
-            val bytesRead = sourceStream.read(buffer)
-            if (bytesRead <= 0) {
-                return bytesRead
-            }
-
-            val decrypted = cipher.update(buffer, 0, bytesRead)
-            System.arraycopy(decrypted, 0, buffer, 0, decrypted.size)
-            bufferLen = decrypted.size
-            bufferPos = 0
-            Log.d(TAG, "Decrypted $bytesRead bytes to ${decrypted.size} bytes")
+        if (position >= decryptedData.size) {
+            return -1
         }
-
-        val available = bufferLen - bufferPos
-        val toCopy = minOf(len, available)
-        System.arraycopy(buffer, bufferPos, b, off, toCopy)
-        bufferPos += toCopy
-
-        return toCopy
+        
+        val available = decryptedData.size - position
+        val toRead = minOf(len, available)
+        
+        System.arraycopy(decryptedData, position, b, off, toRead)
+        position += toRead
+        
+        return toRead
     }
 
     override fun close() {
-        try {
-            val finalBytes = cipher.doFinal()
-            if (finalBytes.isNotEmpty()) {
-                Log.d(TAG, "Final decryption block: ${finalBytes.size} bytes")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in final decryption: ${e.message}")
-        }
-        sourceStream.close()
-        Log.d(TAG, "Stream closed")
+        // Nothing to do - source stream already closed in init
+        Log.d(TAG, "EncryptedInputStream closed")
+    }
+
+    override fun available(): Int {
+        return decryptedData.size - position
     }
 
     companion object {
