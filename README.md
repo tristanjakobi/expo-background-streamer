@@ -270,6 +270,10 @@ Subscribe to transfer events using `addListener()`:
 - Progress notifications shown in notification center
 - Works with Android's background execution limits
 
+## 🧪 Test Server
+
+An example Express.js backend that accepts upload and download requests via streaming is available in `/test_server/`. This server can be used for testing the package functionality during development.
+
 ## 🔧 Development Setup
 
 1. Clone the repository
