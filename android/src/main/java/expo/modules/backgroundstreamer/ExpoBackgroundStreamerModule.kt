@@ -5,12 +5,17 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import android.util.Log
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class ExpoBackgroundStreamerModule : Module() {
     private val TAG = "ExpoBackgroundStreamer"
+    
+    // Use a proper coroutine scope instead of GlobalScope
+    private val moduleScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private fun convertFileUriToPath(fileUri: String): String {
         return if (fileUri.startsWith("file://")) {
@@ -31,6 +36,7 @@ class ExpoBackgroundStreamerModule : Module() {
 
         OnDestroy {
             GlobalStreamObserver.clearEventEmitter()
+            moduleScope.cancel() // Cancel all coroutines when module is destroyed
         }
 
         AsyncFunction("startUpload") { optionsMap: Map<String, Any>, promise: Promise ->
@@ -132,8 +138,8 @@ class ExpoBackgroundStreamerModule : Module() {
                 
                 Log.d(TAG, "Constructed DownloadOptions: $options")
                 
-                // For now, keep downloads as coroutines (can be moved to service later)
-                GlobalScope.launch(Dispatchers.IO) {
+                // Use module scope instead of GlobalScope to prevent thread issues
+                moduleScope.launch {
                     try {
                         UploadService.startDownload(options)
                         promise.resolve(options.downloadId)

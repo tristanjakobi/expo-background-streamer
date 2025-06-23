@@ -12,11 +12,20 @@ import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
+import kotlinx.coroutines.*
+import java.util.concurrent.Executors
 
 object GlobalStreamObserver {
     private var eventEmitter: Module? = null
     private val startTimes = ConcurrentHashMap<String, Long>()
     private const val TAG = "GlobalStreamObserver"
+    
+    // Single-threaded executor for event emission to prevent threading issues
+    private val eventExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "GlobalStreamObserver-EventThread").apply {
+            isDaemon = true
+        }
+    }
 
     fun setEventEmitter(module: Module) {
         eventEmitter = module
@@ -27,10 +36,13 @@ object GlobalStreamObserver {
     }
 
     private fun sendEvent(eventName: String, event: Map<String, Any?>) {
-        try {
-            eventEmitter?.sendEvent(eventName, event)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending event $eventName: ${e.message}")
+        // Dispatch to single-threaded executor to prevent UI thread blocking
+        eventExecutor.execute {
+            try {
+                eventEmitter?.sendEvent(eventName, event)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending event $eventName: ${e.message}")
+            }
         }
     }
 

@@ -11,6 +11,7 @@ public class ExpoBackgroundStreamerModule: Module {
   var activeDownloadTasks: [String: URLSessionDownloadTask] = [:]
   private var startTimes: [String: TimeInterval] = [:]
   var downloadSessions: [String: URLSession] = [:]
+  private var transferStatus: [String: String] = [:]
   
   private func calculateProgressInfo(bytesWritten: Int64, totalBytes: Int64, startTime: TimeInterval) -> [String: Any] {
     let duration = Date().timeIntervalSince1970 - startTime
@@ -56,6 +57,8 @@ public class ExpoBackgroundStreamerModule: Module {
     let startTime = startTimes.removeValue(forKey: uploadId) ?? Date().timeIntervalSince1970
     let duration = Date().timeIntervalSince1970 - startTime
     
+    transferStatus[uploadId] = "completed"
+    
     var params: [String: Any] = [
       "uploadId": uploadId,
       "responseCode": response.statusCode,
@@ -73,6 +76,8 @@ public class ExpoBackgroundStreamerModule: Module {
   func sendDownloadCompleteEvent(downloadId: String, filePath: String) {
     let startTime = startTimes.removeValue(forKey: downloadId) ?? Date().timeIntervalSince1970
     let duration = Date().timeIntervalSince1970 - startTime
+    
+    transferStatus[downloadId] = "completed"
     
     let fileURL = URL(fileURLWithPath: filePath)
     let fileAttributes = try? FileManager.default.attributesOfItem(atPath: filePath)
@@ -102,9 +107,11 @@ public class ExpoBackgroundStreamerModule: Module {
     
     if let uploadId = uploadId {
       params["uploadId"] = uploadId
+      transferStatus[uploadId] = "error"
     }
     if let downloadId = downloadId {
       params["downloadId"] = downloadId
+      transferStatus[downloadId] = "error"
     }
     if let code = code {
       params["code"] = code
@@ -339,6 +346,7 @@ public class ExpoBackgroundStreamerModule: Module {
             
             // Store task and start it
             activeUploadTasks[uploadId] = uploadTask
+            transferStatus[uploadId] = "uploading"
             uploadTask.resume()
             print("[ExpoBackgroundStreamer] Upload task started")
             
@@ -361,6 +369,7 @@ public class ExpoBackgroundStreamerModule: Module {
             if let task = self.activeUploadTasks[uploadId] {
                 task.cancel()
                 self.activeUploadTasks.removeValue(forKey: uploadId)
+                self.transferStatus[uploadId] = "cancelled"
                 print("Successfully cancelled upload: \(uploadId)")
                 return true
             } else {
@@ -422,6 +431,7 @@ public class ExpoBackgroundStreamerModule: Module {
             
             // Store task and start it
             activeDownloadTasks[downloadId] = downloadTask
+            transferStatus[downloadId] = "downloading"
             downloadTask.resume()
             print("[ExpoBackgroundStreamer] Download task started with ID: \(downloadId), encryption: \(delegate.encryptionEnabled ? "enabled" : "disabled")")
             
@@ -442,6 +452,7 @@ public class ExpoBackgroundStreamerModule: Module {
                 
                 // Remove from active tasks
                 self.activeDownloadTasks.removeValue(forKey: downloadId)
+                self.transferStatus[downloadId] = "cancelled"
                 
                 // Send cancellation event
                 self.sendDownloadCompleteEvent(downloadId: downloadId, filePath: "")
@@ -459,24 +470,76 @@ public class ExpoBackgroundStreamerModule: Module {
       }
 
       Function("getActiveUploads") { () -> [String: String] in
-        return Dictionary(uniqueKeysWithValues: self.activeUploadTasks.keys.map { ($0, "uploading") })
+        var result: [String: String] = [:]
+        // Add currently uploading transfers
+        for uploadId in self.activeUploadTasks.keys {
+          result[uploadId] = self.transferStatus[uploadId] ?? "uploading"
+        }
+        // Add failed transfers that are still being tracked
+        for (uploadId, status) in self.transferStatus {
+          if status == "error" {
+            result[uploadId] = status
+          }
+        }
+        return result
       }
 
       Function("getActiveDownloads") { () -> [String: String] in
-        return Dictionary(uniqueKeysWithValues: self.activeDownloadTasks.keys.map { ($0, "downloading") })
+        var result: [String: String] = [:]
+        // Add currently downloading transfers
+        for downloadId in self.activeDownloadTasks.keys {
+          result[downloadId] = self.transferStatus[downloadId] ?? "downloading"
+        }
+        // Add failed transfers that are still being tracked
+        for (downloadId, status) in self.transferStatus {
+          if status == "error" {
+            result[downloadId] = status
+          }
+        }
+        return result
       }
 
       Function("getUploadStatus") { (uploadId: String) -> String? in
-        return self.activeUploadTasks[uploadId] != nil ? "uploading" : nil
+        if self.activeUploadTasks[uploadId] != nil {
+          return self.transferStatus[uploadId] ?? "uploading"
+        } else {
+          return self.transferStatus[uploadId]
+        }
       }
 
       Function("getDownloadStatus") { (downloadId: String) -> String? in
-        return self.activeDownloadTasks[downloadId] != nil ? "downloading" : nil
+        if self.activeDownloadTasks[downloadId] != nil {
+          return self.transferStatus[downloadId] ?? "downloading"
+        } else {
+          return self.transferStatus[downloadId]
+        }
       }
 
       Function("getAllActiveTransfers") { () -> [String: Any] in
-        let uploads = Dictionary(uniqueKeysWithValues: self.activeUploadTasks.keys.map { ($0, "uploading") })
-        let downloads = Dictionary(uniqueKeysWithValues: self.activeDownloadTasks.keys.map { ($0, "downloading") })
+        var uploads: [String: String] = [:]
+        var downloads: [String: String] = [:]
+        
+        // Add currently uploading transfers
+        for uploadId in self.activeUploadTasks.keys {
+          uploads[uploadId] = self.transferStatus[uploadId] ?? "uploading"
+        }
+        // Add failed upload transfers that are still being tracked
+        for (uploadId, status) in self.transferStatus {
+          if status == "error" && self.activeUploadTasks[uploadId] == nil {
+            uploads[uploadId] = status
+          }
+        }
+        
+        // Add currently downloading transfers
+        for downloadId in self.activeDownloadTasks.keys {
+          downloads[downloadId] = self.transferStatus[downloadId] ?? "downloading"
+        }
+        // Add failed download transfers that are still being tracked
+        for (downloadId, status) in self.transferStatus {
+          if status == "error" && self.activeDownloadTasks[downloadId] == nil {
+            downloads[downloadId] = status
+          }
+        }
         
         return [
           "uploads": uploads,

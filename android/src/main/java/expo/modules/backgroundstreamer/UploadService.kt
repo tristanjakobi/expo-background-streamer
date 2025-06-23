@@ -34,6 +34,7 @@ object UploadService {
     private const val TAG = "UploadService"
     private val activeUploads = mutableMapOf<String, HttpURLConnection>()
     private val activeDownloads = mutableMapOf<String, HttpURLConnection>()
+    private val transferStatus = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private fun validateEncryption(encryption: EncryptionOptions?): Pair<String, String> {
         if (encryption?.enabled != true) {
@@ -91,13 +92,14 @@ object UploadService {
                 connection.setRequestProperty(key, value)
             }
 
-            activeUploads[options.uploadId] = connection
-            Log.d(TAG, "Connection stored in activeUploads")
+                    activeUploads[options.uploadId] = connection
+        transferStatus[options.uploadId] = "uploading"
+        Log.d(TAG, "Connection stored in activeUploads")
 
-            try {
-                Log.d(TAG, "Connecting to server...")
-                connection.connect()
-                Log.d(TAG, "Connected successfully")
+        try {
+            Log.d(TAG, "Connecting to server...")
+            connection.connect()
+            Log.d(TAG, "Connected successfully")
 
                 val outputStream = if (options.encryption?.enabled == true) {
                     val (key, nonce) = validateEncryption(options.encryption)
@@ -131,7 +133,13 @@ object UploadService {
                             outputStream.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
                             Log.v(TAG, "Uploaded $totalBytesRead/${file.length()} bytes")
-                            GlobalStreamObserver.onUploadProgress(options.uploadId, totalBytesRead, file.length())
+                            
+                            // Throttle progress events to prevent UI thread blocking (update every 1% or 1MB)
+                            val progress = ((totalBytesRead * 100) / file.length()).toInt()
+                            val lastProgress = (((totalBytesRead - bytesRead) * 100) / file.length()).toInt()
+                            if (progress != lastProgress || totalBytesRead % (1024 * 1024) == 0L) {
+                                GlobalStreamObserver.onUploadProgress(options.uploadId, totalBytesRead, file.length())
+                            }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error during upload: ${e.message}", e)
                             throw e
@@ -161,13 +169,16 @@ object UploadService {
 
                 if (responseCode in 200..299) {
                     Log.d(TAG, "Upload completed successfully")
+                    transferStatus[options.uploadId] = "completed"
                     GlobalStreamObserver.onUploadComplete(options.uploadId, responseCode, responseBody, file.length())
                 } else {
                     Log.e(TAG, "Upload failed with response code: $responseCode")
+                    transferStatus[options.uploadId] = "error"
                     throw CodedException("ERR_UPLOAD_FAILED", "Upload failed with response code: $responseCode", null)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during upload process: ${e.message}", e)
+                transferStatus[options.uploadId] = "error"
                 GlobalStreamObserver.onUploadError(options.uploadId, e.message ?: "Unknown error")
                 throw CodedException("ERR_UPLOAD_START", e.message ?: "Unknown error", e)
             } finally {
@@ -199,6 +210,7 @@ object UploadService {
         }
 
         activeDownloads[options.downloadId] = connection
+        transferStatus[options.downloadId] = "downloading"
 
         try {
             connection.connect()
@@ -227,14 +239,22 @@ object UploadService {
                 while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                     output.write(buffer, 0, bytesRead)
                     totalBytesRead += bytesRead
-                    GlobalStreamObserver.onDownloadProgress(options.downloadId, totalBytesRead, contentLength)
+                    
+                    // Throttle progress events to prevent UI thread blocking (update every 1% or 1MB)
+                    val progress = if (contentLength > 0) ((totalBytesRead * 100) / contentLength).toInt() else 0
+                    val lastProgress = if (contentLength > 0) (((totalBytesRead - bytesRead) * 100) / contentLength).toInt() else 0
+                    if (progress != lastProgress || totalBytesRead % (1024 * 1024) == 0L) {
+                        GlobalStreamObserver.onDownloadProgress(options.downloadId, totalBytesRead, contentLength)
+                    }
                 }
             }
 
             inputStream.close()
 
+            transferStatus[options.downloadId] = "completed"
             GlobalStreamObserver.onDownloadComplete(options.downloadId, file.absolutePath)
         } catch (e: Exception) {
+            transferStatus[options.downloadId] = "error"
             GlobalStreamObserver.onDownloadError(options.downloadId, e.message ?: "Unknown error")
             throw CodedException("ERR_DOWNLOAD_START", e.message ?: "Unknown error", e)
         } finally {
@@ -246,20 +266,30 @@ object UploadService {
         try {
             activeDownloads[downloadId]?.disconnect()
             activeDownloads.remove(downloadId)
+            transferStatus[downloadId] = "cancelled"
         } catch (e: Exception) {
             throw CodedException("ERR_DOWNLOAD_CANCEL", e.message ?: "Unknown error", e)
         }
     }
 
     fun getActiveDownloads(): Map<String, String> {
-        return activeDownloads.keys.associateWith { "downloading" }
+        val result = mutableMapOf<String, String>()
+        // Add currently downloading transfers
+        activeDownloads.keys.forEach { downloadId ->
+            result[downloadId] = transferStatus[downloadId] ?: "downloading"
+        }
+        // Add failed transfers that are still being tracked
+        transferStatus.filter { it.value == "error" }.forEach { (downloadId, status) ->
+            result[downloadId] = status
+        }
+        return result
     }
     
     fun getDownloadStatus(downloadId: String): String? {
         return if (activeDownloads.containsKey(downloadId)) {
-            "downloading"
+            transferStatus[downloadId] ?: "downloading"
         } else {
-            null
+            transferStatus[downloadId]
         }
     }
 } 

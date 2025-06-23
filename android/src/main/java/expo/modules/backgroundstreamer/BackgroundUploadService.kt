@@ -32,6 +32,7 @@ class BackgroundUploadService : Service() {
         
         private val activeUploads = ConcurrentHashMap<String, Job>()
         private val activeConnections = ConcurrentHashMap<String, HttpURLConnection>()
+        private val transferStatus = ConcurrentHashMap<String, String>()
         
         fun startUpload(context: Context, options: UploadOptions) {
             val intent = Intent(context, BackgroundUploadService::class.java).apply {
@@ -52,14 +53,23 @@ class BackgroundUploadService : Service() {
         }
         
         fun getActiveUploads(): Map<String, String> {
-            return activeUploads.keys.associateWith { "uploading" }
+            val result = mutableMapOf<String, String>()
+            // Add currently uploading transfers
+            activeUploads.keys.forEach { uploadId ->
+                result[uploadId] = transferStatus[uploadId] ?: "uploading"
+            }
+            // Add failed transfers that are still being tracked
+            transferStatus.filter { it.value == "error" }.forEach { (uploadId, status) ->
+                result[uploadId] = status
+            }
+            return result
         }
         
         fun getUploadStatus(uploadId: String): String? {
             return if (activeUploads.containsKey(uploadId)) {
-                "uploading"
+                transferStatus[uploadId] ?: "uploading"
             } else {
-                null
+                transferStatus[uploadId]
             }
         }
     }
@@ -155,12 +165,15 @@ class BackgroundUploadService : Service() {
         
         val uploadJob = serviceScope.launch {
             Log.d(TAG, "Upload coroutine started for ${options.uploadId}")
+            transferStatus[options.uploadId] = "uploading"
             try {
                 Log.d(TAG, "About to call performUpload...")
                 performUpload(options)
                 Log.d(TAG, "performUpload completed successfully")
+                transferStatus[options.uploadId] = "completed"
             } catch (e: Exception) {
                 Log.e(TAG, "Upload failed: ${e.javaClass.simpleName}: ${e.message}", e)
+                transferStatus[options.uploadId] = "error"
                 GlobalStreamObserver.onUploadError(options.uploadId, e.message ?: "Unknown error")
             } finally {
                 activeUploads.remove(options.uploadId)
@@ -192,6 +205,7 @@ class BackgroundUploadService : Service() {
         activeUploads.remove(uploadId)
         activeConnections.remove(uploadId)
         
+        transferStatus[uploadId] = "cancelled"
         GlobalStreamObserver.onUploadError(uploadId, "Upload cancelled by user")
         
         if (activeUploads.isEmpty()) {
@@ -274,8 +288,11 @@ class BackgroundUploadService : Service() {
                     )
                     notificationManager.notify(NOTIFICATION_ID, progressNotification)
                     
-                    // Notify observers
-                    GlobalStreamObserver.onUploadProgress(options.uploadId, totalBytesRead, fileSize)
+                    // Throttle progress events to prevent UI thread blocking (update every 1% or 1MB)
+                    val lastProgress = (((totalBytesRead - bytesRead) * 100) / fileSize).toInt()
+                    if (progress != lastProgress || totalBytesRead % (1024 * 1024) == 0L) {
+                        GlobalStreamObserver.onUploadProgress(options.uploadId, totalBytesRead, fileSize)
+                    }
                 }
             }
             
