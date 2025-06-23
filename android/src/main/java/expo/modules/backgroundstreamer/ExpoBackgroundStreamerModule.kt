@@ -23,7 +23,7 @@ class ExpoBackgroundStreamerModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ExpoBackgroundStreamer")
 
-        Events("onUploadProgress", "onUploadComplete", "onUploadError", "onDownloadProgress", "onDownloadComplete", "onDownloadError")
+        Events("upload-progress", "upload-complete", "upload-error", "download-progress", "download-complete", "download-error", "error", "debug")
 
         OnCreate {
             GlobalStreamObserver.setEventEmitter(this@ExpoBackgroundStreamerModule)

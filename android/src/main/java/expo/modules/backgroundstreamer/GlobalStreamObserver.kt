@@ -39,43 +39,45 @@ object GlobalStreamObserver {
         val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
         val speed = if (elapsedTime > 0) (bytesWritten / elapsedTime).roundToInt() else 0
         val progress = if (contentLength > 0) (bytesWritten * 100.0 / contentLength).roundToInt() else 0
+        val estimatedTimeRemaining = if (speed > 0 && contentLength > 0) 
+            ((contentLength - bytesWritten) / speed).toDouble() else 0.0
 
         val event = mapOf(
-            "type" to "uploadProgress",
             "uploadId" to uploadId,
+            "progress" to progress,
             "bytesWritten" to bytesWritten,
-            "contentLength" to contentLength,
+            "totalBytes" to contentLength,
             "speed" to speed,
-            "progress" to progress
+            "estimatedTimeRemaining" to estimatedTimeRemaining
         )
 
-        sendEvent("onUploadProgress", event)
+        sendEvent("upload-progress", event)
     }
 
-    fun onUploadComplete(uploadId: String, responseCode: Int, responseBody: String) {
+    fun onUploadComplete(uploadId: String, responseCode: Int, responseBody: String, totalBytes: Long = 0L) {
         val startTime = startTimes.remove(uploadId) ?: System.currentTimeMillis()
         val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
 
         val event = mapOf(
-            "type" to "uploadComplete",
             "uploadId" to uploadId,
+            "response" to responseBody,
+            "responseHeaders" to emptyMap<String, String>(),
             "responseCode" to responseCode,
-            "responseBody" to responseBody,
-            "elapsedTime" to elapsedTime
+            "totalBytes" to totalBytes,
+            "duration" to elapsedTime
         )
 
-        sendEvent("onUploadComplete", event)
+        sendEvent("upload-complete", event)
     }
 
     fun onUploadError(uploadId: String, error: String) {
         startTimes.remove(uploadId)
         val event = mapOf(
-            "type" to "uploadError",
             "uploadId" to uploadId,
             "error" to error
         )
 
-        sendEvent("onUploadError", event)
+        sendEvent("error", event)
     }
 
     fun onDownloadProgress(downloadId: String, bytesRead: Long, contentLength: Long) {
@@ -83,42 +85,62 @@ object GlobalStreamObserver {
         val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
         val speed = if (elapsedTime > 0) (bytesRead / elapsedTime).roundToInt() else 0
         val progress = if (contentLength > 0) (bytesRead * 100.0 / contentLength).roundToInt() else 0
+        val estimatedTimeRemaining = if (speed > 0 && contentLength > 0) 
+            ((contentLength - bytesRead) / speed).toDouble() else 0.0
 
         val event = mapOf(
-            "type" to "downloadProgress",
             "downloadId" to downloadId,
-            "bytesRead" to bytesRead,
-            "contentLength" to contentLength,
+            "progress" to progress,
+            "bytesWritten" to bytesRead,
+            "totalBytes" to contentLength,
             "speed" to speed,
-            "progress" to progress
+            "estimatedTimeRemaining" to estimatedTimeRemaining
         )
 
-        sendEvent("onDownloadProgress", event)
+        sendEvent("download-progress", event)
     }
 
     fun onDownloadComplete(downloadId: String, filePath: String) {
         val startTime = startTimes.remove(downloadId) ?: System.currentTimeMillis()
         val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
 
+        // Get file info
+        val file = File(filePath)
+        val fileSize = if (file.exists()) file.length() else 0L
+        
+        // Basic MIME type detection
+        val mimeType = when (file.extension.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "gif" -> "image/gif"
+            "pdf" -> "application/pdf"
+            "txt" -> "text/plain"
+            "json" -> "application/json"
+            "xml" -> "application/xml"
+            "mp4" -> "video/mp4"
+            "mp3" -> "audio/mpeg"
+            else -> "application/octet-stream"
+        }
+
         val event = mapOf(
-            "type" to "downloadComplete",
             "downloadId" to downloadId,
             "filePath" to filePath,
-            "elapsedTime" to elapsedTime
+            "totalBytes" to fileSize,
+            "duration" to elapsedTime,
+            "mimeType" to mimeType
         )
 
-        sendEvent("onDownloadComplete", event)
+        sendEvent("download-complete", event)
     }
 
     fun onDownloadError(downloadId: String, error: String) {
         startTimes.remove(downloadId)
         val event = mapOf(
-            "type" to "downloadError",
             "downloadId" to downloadId,
             "error" to error
         )
 
-        sendEvent("onDownloadError", event)
+        sendEvent("error", event)
     }
 
     fun onDebug(message: String, level: String = "info", details: Map<String, Any>? = null) {

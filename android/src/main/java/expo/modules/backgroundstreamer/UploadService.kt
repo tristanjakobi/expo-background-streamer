@@ -103,8 +103,8 @@ object UploadService {
                     val (key, nonce) = validateEncryption(options.encryption)
                     Log.d(TAG, "Setting up encrypted output stream")
                     try {
-                        val keyBytes = key.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-                        val nonceBytes = nonce.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                        val keyBytes = Base64.getDecoder().decode(key)
+                        val nonceBytes = Base64.getDecoder().decode(nonce)
                         val secretKey = SecretKeySpec(keyBytes, "AES")
                         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                         Log.d(TAG, "Initializing cipher with nonce length: ${nonceBytes.size}")
@@ -161,7 +161,7 @@ object UploadService {
 
                 if (responseCode in 200..299) {
                     Log.d(TAG, "Upload completed successfully")
-                    GlobalStreamObserver.onUploadComplete(options.uploadId, responseCode, responseBody)
+                    GlobalStreamObserver.onUploadComplete(options.uploadId, responseCode, responseBody, file.length())
                 } else {
                     Log.e(TAG, "Upload failed with response code: $responseCode")
                     throw CodedException("ERR_UPLOAD_FAILED", "Upload failed with response code: $responseCode", null)
@@ -209,8 +209,8 @@ object UploadService {
 
             val inputStream = if (options.encryption?.enabled == true) {
                 val (key, nonce) = validateEncryption(options.encryption)
-                val keyBytes = key.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-                val nonceBytes = nonce.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                val keyBytes = Base64.getDecoder().decode(key)
+                val nonceBytes = Base64.getDecoder().decode(nonce)
                 val secretKey = SecretKeySpec(keyBytes, "AES")
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
                 cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, nonceBytes))

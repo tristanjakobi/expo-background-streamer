@@ -18,6 +18,7 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import expo.modules.kotlin.exception.CodedException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.Base64
 
 class BackgroundUploadService : Service() {
     companion object {
@@ -309,8 +310,8 @@ class BackgroundUploadService : Service() {
         val key = encryption.key ?: throw CodedException("ERR_ENCRYPTION_CONFIG", "Encryption key is required", null)
         val nonce = encryption.nonce ?: throw CodedException("ERR_ENCRYPTION_CONFIG", "Encryption nonce is required", null)
         
-        val keyBytes = key.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        val nonceBytes = nonce.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val keyBytes = Base64.getDecoder().decode(key)
+        val nonceBytes = Base64.getDecoder().decode(nonce)
         val secretKey = SecretKeySpec(keyBytes, "AES")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         
