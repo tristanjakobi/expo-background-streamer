@@ -17,7 +17,11 @@ class ExpoBackgroundStreamerModule : Module() {
     // Use a proper coroutine scope instead of GlobalScope
     private val moduleScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    private fun convertFileUriToPath(fileUri: String): String {
+    private fun convertFileUriToPath(fileUri: String?): String {
+        if (fileUri == null) {
+            Log.w(TAG, "File URI is null, returning empty string")
+            return ""
+        }
         return if (fileUri.startsWith("file://")) {
             fileUri.substring(7)
         } else {
@@ -59,13 +63,13 @@ class ExpoBackgroundStreamerModule : Module() {
                 
                 Log.d(TAG, "Constructed encryption object: $encryption")
                 Log.d(TAG, "Encryption enabled: ${encryption?.enabled}")
-                Log.d(TAG, "Encryption key: ${encryption?.key}")
-                Log.d(TAG, "Encryption nonce: ${encryption?.nonce}")
+                Log.d(TAG, "Encryption key: ${encryption?.key ?: "null"}")
+                Log.d(TAG, "Encryption nonce: ${encryption?.nonce ?: "null"}")
                 
                 // Create UploadOptions manually
                 val options = UploadOptions(
                     url = optionsMap["url"] as? String ?: "",
-                    path = convertFileUriToPath(optionsMap["path"] as? String ?: ""),
+                    path = convertFileUriToPath(optionsMap["path"] as? String),
                     method = optionsMap["method"] as? String ?: "POST",
                     headers = (optionsMap["headers"] as? Map<String, String>) ?: mapOf(),
                     customTransferId = optionsMap["customTransferId"] as? String,
@@ -127,7 +131,7 @@ class ExpoBackgroundStreamerModule : Module() {
                 // Create DownloadOptions manually
                 val options = DownloadOptions(
                     url = optionsMap["url"] as? String ?: "",
-                    path = convertFileUriToPath(optionsMap["path"] as? String ?: ""),
+                    path = convertFileUriToPath(optionsMap["path"] as? String),
                     method = optionsMap["method"] as? String ?: "GET",
                     headers = (optionsMap["headers"] as? Map<String, String>) ?: mapOf(),
                     customTransferId = optionsMap["customTransferId"] as? String,

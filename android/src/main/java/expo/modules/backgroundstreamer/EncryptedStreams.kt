@@ -3,7 +3,6 @@ package expo.modules.backgroundstreamer
 import android.util.Log
 import java.io.*
 import javax.crypto.Cipher
-import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import java.util.Base64
 
@@ -22,11 +21,11 @@ class EncryptedInputStream(
         val encryptedData = sourceStream.readBytes()
         Log.d(TAG, "Read ${encryptedData.size} bytes of encrypted data")
         
-        // Decrypt all at once (GCM requires this)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        // Decrypt all at once (CTR allows streaming)
+        val cipher = Cipher.getInstance("AES/CTR/NoPadding")
         val keySpec = SecretKeySpec(key, "AES")
-        val gcmSpec = GCMParameterSpec(128, nonce)
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
+        val ivSpec = javax.crypto.spec.IvParameterSpec(nonce)
+        cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
         
         decryptedData = cipher.doFinal(encryptedData)
         Log.d(TAG, "Successfully decrypted ${encryptedData.size} bytes to ${decryptedData.size} bytes")

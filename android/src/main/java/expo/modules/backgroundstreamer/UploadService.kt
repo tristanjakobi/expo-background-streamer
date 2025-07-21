@@ -61,13 +61,13 @@ object UploadService {
         Log.d(TAG, "Headers: ${options.headers}")
         Log.d(TAG, "Encryption object: ${options.encryption}")
         Log.d(TAG, "Encryption enabled: ${options.encryption?.enabled}")
-        Log.d(TAG, "Encryption key: ${options.encryption?.key}")
-        Log.d(TAG, "Encryption nonce: ${options.encryption?.nonce}")
+        Log.d(TAG, "Encryption key: ${options.encryption?.key ?: "null"}")
+        Log.d(TAG, "Encryption nonce: ${options.encryption?.nonce ?: "null"}")
 
         if (options.encryption?.enabled == true) {
             val (key, nonce) = validateEncryption(options.encryption)
-            Log.d(TAG, "Encryption key length: ${key.length} bytes")
-            Log.d(TAG, "Encryption nonce length: ${nonce.length} bytes")
+            Log.d(TAG, "Encryption key length: ${key?.length ?: 0} bytes")
+            Log.d(TAG, "Encryption nonce length: ${nonce?.length ?: 0} bytes")
         } else {
             Log.w(TAG, "Encryption is null or not enabled")
         }
@@ -108,9 +108,9 @@ object UploadService {
                         val keyBytes = Base64.getDecoder().decode(key)
                         val nonceBytes = Base64.getDecoder().decode(nonce)
                         val secretKey = SecretKeySpec(keyBytes, "AES")
-                        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                        val cipher = Cipher.getInstance("AES/CTR/NoPadding")
                         Log.d(TAG, "Initializing cipher with nonce length: ${nonceBytes.size}")
-                        cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(128, nonceBytes))
+                        cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(nonceBytes))
                         Log.d(TAG, "Cipher initialized successfully")
                         EncryptedOutputStream(connection.outputStream, cipher, nonceBytes)
                     } catch (e: Exception) {
@@ -224,8 +224,8 @@ object UploadService {
                 val keyBytes = Base64.getDecoder().decode(key)
                 val nonceBytes = Base64.getDecoder().decode(nonce)
                 val secretKey = SecretKeySpec(keyBytes, "AES")
-                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-                cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, nonceBytes))
+                val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, secretKey, IvParameterSpec(nonceBytes))
                 EncryptedInputStream(connection.inputStream, keyBytes, nonceBytes)
             } else {
                 connection.inputStream

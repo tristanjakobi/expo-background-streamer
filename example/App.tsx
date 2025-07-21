@@ -162,7 +162,7 @@ export default function App() {
       const fileInfo = await FileSystem.getInfoAsync(filePath, { size: true });
       addLog(`File size: ${fileInfo.exists ? fileInfo.size : "unknown"} bytes`);
 
-      const uploadUrl = "http://10.0.2.2:3000/upload";
+      const uploadUrl = "http://localhost:3000/upload";
       const keys = await generateEncryptionKeys();
       setEncryptionKeys(keys);
 

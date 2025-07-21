@@ -1,42 +1,42 @@
 {
-  "name": "expo-background-streamer",
-  "version": "0.4.3",
-  "description": "A powerful background file uploader for Expo/React Native applications",
-  "main": "./build/BackgroundStreamer.js",
-  "types": "./build/BackgroundStreamer.d.ts",
-  "scripts": {
-    "build": "node scripts/build.js",
-    "clean": "expo-module clean",
-    "lint": "expo-module lint",
-    "test": "expo-module test",
-    "prepare": "expo-module prepare",
-    "prepublishOnly": "expo-module prepublishOnly",
-    "expo-module": "expo-module",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
-  },
-  "keywords": [
-    "react-native",
-    "expo",
-    "expo-background-streamer",
-    "ExpoBackgroundStreamer"
-  ],
-  "repository": "https://github.com/tristanjakobi/expo-background-streamer",
-  "bugs": {
-    "url": "https://github.com/tristanjakobi/expo-background-streamer/issues"
-  },
-  "author": "tristanjakobi <tristanjakobi08@gmail.com> (https://github.com/tristanjakobi)",
-  "license": "MIT",
-  "homepage": "https://github.com/tristanjakobi/expo-background-streamer#readme",
-  "devDependencies": {
-    "expo-module-scripts": "^4.1.7"
-  },
-  "peerDependencies": {
-    "expo": "*"
-  },
-  "peerDependenciesMeta": {
-    "expo": {
-      "optional": true
-    }
-  }
+	"name": "expo-background-streamer",
+	"version": "0.5.0",
+	"description": "A powerful background file uploader for Expo/React Native applications",
+	"main": "./build/BackgroundStreamer.js",
+	"types": "./build/BackgroundStreamer.d.ts",
+	"scripts": {
+		"build": "node scripts/build.js",
+		"clean": "expo-module clean",
+		"lint": "expo-module lint",
+		"test": "expo-module test",
+		"prepare": "expo-module prepare",
+		"prepublishOnly": "expo-module prepublishOnly",
+		"expo-module": "expo-module",
+		"android": "expo run:android",
+		"ios": "expo run:ios"
+	},
+	"keywords": [
+		"react-native",
+		"expo",
+		"expo-background-streamer",
+		"ExpoBackgroundStreamer"
+	],
+	"repository": "https://github.com/tristanjakobi/expo-background-streamer",
+	"bugs": {
+		"url": "https://github.com/tristanjakobi/expo-background-streamer/issues"
+	},
+	"author": "tristanjakobi <tristanjakobi08@gmail.com> (https://github.com/tristanjakobi)",
+	"license": "MIT",
+	"homepage": "https://github.com/tristanjakobi/expo-background-streamer#readme",
+	"devDependencies": {
+		"expo-module-scripts": "^4.1.7"
+	},
+	"peerDependencies": {
+		"expo": "*"
+	},
+	"peerDependenciesMeta": {
+		"expo": {
+			"optional": true
+		}
+	}
 }
