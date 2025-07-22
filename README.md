@@ -264,16 +264,10 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 ## 🙏 Acknowledgments
 
 - I was inspired by [android-upload-service](https://github.com/gotev/android-upload-service) and [VydiaRNFileUploader](https://github.com/Vydia/react-native-background-upload)
-- Built with ❤️ for the Expo community
+- Built with no ❤️ just trial and error
 
 ## 📞 Support
 
 - 🐛 **Bug reports**: [GitHub Issues](https://github.com/tristanjakobi/expo-background-streamer/issues)
 - 💬 **Questions**: [GitHub Discussions](https://github.com/tristanjakobi/expo-background-streamer/discussions)
 - 📧 **Email**: tristanjakobi08@gmail.com
-
----
-
-<div align="center">
-  <strong>Built with ❤️ using Expo</strong>
-</div>
