@@ -107,12 +107,8 @@ object UploadService {
                     try {
                         val keyBytes = Base64.getDecoder().decode(key)
                         val nonceBytes = Base64.getDecoder().decode(nonce)
-                        val secretKey = SecretKeySpec(keyBytes, "AES")
-                        val cipher = Cipher.getInstance("AES/CTR/NoPadding")
-                        Log.d(TAG, "Initializing cipher with nonce length: ${nonceBytes.size}")
-                        cipher.init(Cipher.ENCRYPT_MODE, secretKey, IvParameterSpec(nonceBytes))
-                        Log.d(TAG, "Cipher initialized successfully")
-                        EncryptedOutputStream(connection.outputStream, cipher, nonceBytes)
+                        Log.d(TAG, "Using EncryptedOutputStream with key/nonce")
+                        EncryptedOutputStream(connection.outputStream, keyBytes, nonceBytes)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error setting up encryption: ${e.message}", e)
                         throw e
@@ -223,9 +219,7 @@ object UploadService {
                 val (key, nonce) = validateEncryption(options.encryption)
                 val keyBytes = Base64.getDecoder().decode(key)
                 val nonceBytes = Base64.getDecoder().decode(nonce)
-                val secretKey = SecretKeySpec(keyBytes, "AES")
-                val cipher = Cipher.getInstance("AES/CTR/NoPadding")
-                cipher.init(Cipher.DECRYPT_MODE, secretKey, IvParameterSpec(nonceBytes))
+                Log.d(TAG, "Using EncryptedInputStream with key/nonce")
                 EncryptedInputStream(connection.inputStream, keyBytes, nonceBytes)
             } else {
                 connection.inputStream

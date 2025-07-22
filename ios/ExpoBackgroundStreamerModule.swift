@@ -268,87 +268,42 @@ public class ExpoBackgroundStreamerModule: Module {
             // Get file size and set content length
             request.setValue("\(fileSize)", forHTTPHeaderField: "Content-Length")
             
-            // Read file data
-            let fileData: Data
+            var uploadStream: InputStream
+            var uploadSize: Int64
             if let encryption = options["encryption"] as? [String: Any],
                let enabled = encryption["enabled"] as? Bool,
                enabled {
-                print("[ExpoBackgroundStreamer] Creating encrypted data")
+                print("[ExpoBackgroundStreamer] Using EncryptedInputStream for chunked upload")
                 guard let keyData = Data(base64Encoded: encryptionKey),
-                      let nonceData = Data(base64Encoded: encryptionNonce) else {
-                    throw NSError(domain: "ExpoBackgroundStreamer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid encryption key or nonce"])
+                      let nonceData = Data(base64Encoded: encryptionNonce),
+                      let fileStream = InputStream(fileAtPath: filePath),
+                      let encryptedStream = EncryptedInputStream(inputStream: fileStream, key: keyData, nonce: nonceData) else {
+                    throw NSError(domain: "ExpoBackgroundStreamer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create encrypted input stream"])
                 }
-                
-                let inputStream = InputStream(fileAtPath: filePath)!
-                inputStream.open()
-                defer { inputStream.close() }
-                
-                let bufferSize = 4096
-                let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-                defer { buffer.deallocate() }
-                
-                var encryptedData = Data()
-                var keyIndex = 0
-                var nonceIndex = 0
-                
-                while true {
-                    let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
-                    if bytesRead <= 0 { break }
-                    
-                    var encryptedBytes = [UInt8](repeating: 0, count: bytesRead)
-                    for i in 0..<bytesRead {
-                        let keyByte = keyData[keyIndex % keyData.count]
-                        let nonceByte = nonceData[nonceIndex % nonceData.count]
-                        encryptedBytes[i] = buffer[i] ^ keyByte ^ nonceByte
-                        keyIndex += 1
-                        nonceIndex += 1
-                    }
-                    
-                    encryptedData.append(contentsOf: encryptedBytes)
-                }
-                
-                fileData = encryptedData
-                print("[ExpoBackgroundStreamer] Successfully encrypted data, size: \(encryptedData.count) bytes")
+                uploadStream = encryptedStream
+                let attr = try FileManager.default.attributesOfItem(atPath: filePath)
+                uploadSize = attr[.size] as? Int64 ?? 0
             } else {
-                fileData = try Data(contentsOf: URL(fileURLWithPath: filePath))
+                guard let fileStream = InputStream(fileAtPath: filePath) else {
+                    throw NSError(domain: "ExpoBackgroundStreamer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to open file stream"])
+                }
+                uploadStream = fileStream
+                let attr = try FileManager.default.attributesOfItem(atPath: filePath)
+                uploadSize = attr[.size] as? Int64 ?? 0
             }
             
-            // Create upload task with delegate
+            // Create upload task with delegate (streaming)
             let session = URLSession.shared
-            let delegate = UploadTaskDelegate(uploadId: uploadId, module: self, totalBytesExpectedToSend: Int64(fileData.count))
-            let uploadTask = session.uploadTask(with: request, from: fileData) { [weak self] data, response, error in
-                guard let self = self else { return }
-                
-                if let error = error {
-                    print("[ExpoBackgroundStreamer] Upload failed with error: \(error.localizedDescription)")
-                    self.sendErrorEvent(uploadId: uploadId, error: error)
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    let error = NSError(domain: "ExpoBackgroundStreamer", code: 0, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
-                    print("[ExpoBackgroundStreamer] Upload failed: Invalid response")
-                    self.sendErrorEvent(uploadId: uploadId, error: error)
-                    return
-                }
-                
-                print("[ExpoBackgroundStreamer] Upload completed:")
-                print("  ➤ Status code: \(httpResponse.statusCode)")
-                print("  ➤ Response headers: \(httpResponse.allHeaderFields)")
-                if let data = data, let responseString = String(data: data, encoding: .utf8) {
-                    print("  ➤ Response body: \(responseString)")
-                }
-                
-                self.sendUploadCompleteEvent(uploadId: uploadId, response: httpResponse, responseData: data)
-                self.activeUploadTasks.removeValue(forKey: uploadId)
-            }
+            let delegate = UploadTaskDelegate(uploadId: uploadId, module: self, totalBytesExpectedToSend: uploadSize)
+            let uploadTask = session.uploadTask(withStreamedRequest: request)
             uploadTask.setValue(delegate, forKey: "delegate")
-            
+            // Store stream for delegate to provide
+            delegate.provideStream = { uploadStream }
             // Store task and start it
             activeUploadTasks[uploadId] = uploadTask
             transferStatus[uploadId] = "uploading"
             uploadTask.resume()
-            print("[ExpoBackgroundStreamer] Upload task started")
+            print("[ExpoBackgroundStreamer] Upload task started (streamed)")
             
             return uploadId
             
@@ -556,6 +511,7 @@ class UploadTaskDelegate: NSObject, URLSessionTaskDelegate, URLSessionDataDelega
     private let module: ExpoBackgroundStreamerModule
     private let totalBytesExpectedToSend: Int64
     private var totalBytesSent: Int64 = 0
+    var provideStream: (() -> InputStream)?
     
     init(uploadId: String, module: ExpoBackgroundStreamerModule, totalBytesExpectedToSend: Int64) {
         self.uploadId = uploadId
@@ -563,6 +519,11 @@ class UploadTaskDelegate: NSObject, URLSessionTaskDelegate, URLSessionDataDelega
         self.totalBytesExpectedToSend = totalBytesExpectedToSend
         super.init()
         module.sendDebugEvent(message: "UploadTaskDelegate initialized for uploadId: \(uploadId), expected bytes: \(totalBytesExpectedToSend)")
+    }
+    
+    // Provide the encrypted stream for uploadTask(withStreamedRequest:)
+    func urlSession(_ session: URLSession, task: URLSessionTask, needNewBodyStream completionHandler: @escaping (InputStream?) -> Void) {
+        completionHandler(provideStream?())
     }
     
     func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
@@ -620,7 +581,7 @@ class DownloadTaskDelegate: NSObject, URLSessionDownloadDelegate {
             
             // Handle encryption if enabled
             if encryptionEnabled {
-                print("[ExpoBackgroundStreamer] Decrypting downloaded file")
+                print("[ExpoBackgroundStreamer] Decrypting downloaded file using AES/CTR/NoPadding stream")
                 guard let key = encryptionKey,
                       let nonce = encryptionNonce,
                       let keyData = Data(base64Encoded: key),
@@ -628,50 +589,27 @@ class DownloadTaskDelegate: NSObject, URLSessionDownloadDelegate {
                     print("[ExpoBackgroundStreamer] Failed to parse encryption key/nonce")
                     throw NSError(domain: "ExpoBackgroundStreamer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid encryption key or nonce"])
                 }
-                
-                print("[ExpoBackgroundStreamer] Using key length: \(keyData.count), nonce length: \(nonceData.count)")
-                
-                let inputStream = InputStream(url: location)!
+                guard let inputStream = InputStream(url: location),
+                      let encryptedOutputStream = EncryptedOutputStream(filePath: path, key: keyData, nonce: nonceData) else {
+                    print("[ExpoBackgroundStreamer] Failed to create encrypted output stream")
+                    throw NSError(domain: "ExpoBackgroundStreamer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create encrypted output stream"])
+                }
                 inputStream.open()
                 defer { inputStream.close() }
-                
-                let outputStream = OutputStream(toFileAtPath: path, append: false)!
-                outputStream.open()
-                defer { outputStream.close() }
-                
                 let bufferSize = 4096
                 let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
                 defer { buffer.deallocate() }
-                
-                var keyIndex = 0
-                var nonceIndex = 0
                 var totalBytesRead = 0
-                
                 while true {
                     let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
                     if bytesRead <= 0 { break }
-                    
-                    var decryptedBytes = [UInt8](repeating: 0, count: bytesRead)
-                    for i in 0..<bytesRead {
-                        let keyByte = keyData[keyIndex % keyData.count]
-                        let nonceByte = nonceData[nonceIndex % nonceData.count]
-                        decryptedBytes[i] = buffer[i] ^ keyByte ^ nonceByte
-                        keyIndex += 1
-                        nonceIndex += 1
-                    }
-                    
-                    let bytesWritten = outputStream.write(decryptedBytes, maxLength: bytesRead)
-                    if bytesWritten != bytesRead {
-                        print("[ExpoBackgroundStreamer] Failed to write decrypted data: wrote \(bytesWritten) of \(bytesRead) bytes")
-                        throw NSError(domain: "ExpoBackgroundStreamer", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to write decrypted data"])
-                    }
-                    
+                    let chunk = Data(bytes: buffer, count: bytesRead)
+                    _ = try encryptedOutputStream.write(data: chunk)
                     totalBytesRead += bytesRead
                     print("[ExpoBackgroundStreamer] Decrypted chunk: \(bytesRead) bytes, total: \(totalBytesRead) bytes")
                 }
-                
+                encryptedOutputStream.close()
                 print("[ExpoBackgroundStreamer] Successfully decrypted file, total bytes: \(totalBytesRead)")
-                
                 // Verify file exists and is readable
                 if fileManager.fileExists(atPath: path) {
                     let attributes = try fileManager.attributesOfItem(atPath: path)

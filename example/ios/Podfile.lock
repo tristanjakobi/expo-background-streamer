@@ -32,7 +32,7 @@ PODS:
     - Yoga
   - ExpoAsset (11.1.5):
     - ExpoModulesCore
-  - ExpoBackgroundStreamer (0.4.2):
+  - ExpoBackgroundStreamer (0.5.4):
     - ExpoModulesCore
   - ExpoCrypto (14.1.5):
     - ExpoModulesCore
@@ -1977,7 +1977,7 @@ SPEC CHECKSUMS:
   EXConstants: 9f310f44bfedba09087042756802040e464323c0
   Expo: 4e8bda07d30b024b1732f87843a5349a3ecc1316
   ExpoAsset: 3bc9adb7dbbf27ae82c18ca97eb988a3ae7e73b1
-  ExpoBackgroundStreamer: 252cd8e09daf3b009cd1c05d669e17d9819efd42
+  ExpoBackgroundStreamer: 6967c3674215df4269c6b6ddee6bd7a77bcc1c28
   ExpoCrypto: a9f1d75baeea6ef8b03c1660621585196c382e85
   ExpoFileSystem: c36eb8155eb2381c83dda7dc210e3eec332368b6
   ExpoFont: abbb91a911eb961652c2b0a22eef801860425ed6

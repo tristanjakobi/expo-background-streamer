@@ -329,11 +329,6 @@ class BackgroundUploadService : Service() {
         
         val keyBytes = Base64.getDecoder().decode(key)
         val nonceBytes = Base64.getDecoder().decode(nonce)
-        val secretKey = SecretKeySpec(keyBytes, "AES")
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(128, nonceBytes))
-        
-        return EncryptedOutputStream(connection.outputStream, cipher, nonceBytes)
+        return EncryptedOutputStream(connection.outputStream, keyBytes, nonceBytes)
     }
 } 
