@@ -10,13 +10,10 @@ A powerful background file uploader and downloader for Expo/React Native applica
 ## ✨ Features
 
 - 📱 **Background transfers** - Upload and download files in the background on iOS and Android
-- 🔒 **Encryption support** - Optional AES encryption for secure file transfers
+- 🔒 **Encryption support** - AES/CTR/NoPadding encryption for secure file transfers
 - 🗜️ **Compression** - Built-in compression to reduce transfer times
 - 📊 **Real-time progress** - Detailed progress tracking with speed and ETA
-- 🎯 **Promise-based API** - Simple, modern JavaScript API
-- 🔄 **Automatic retry** - Built-in retry logic for failed transfers
 - 📝 **TypeScript support** - Full TypeScript definitions included
-- 🎨 **Customizable notifications** - Native progress notifications
 - 🚀 **Streaming transfers** - No temporary files needed
 - 📱 **Cross-platform** - Works on both iOS and Android
 
@@ -34,12 +31,12 @@ npx expo install expo-background-streamer
 import ExpoBackgroundStreamer from "expo-background-streamer";
 
 const uploadId = await ExpoBackgroundStreamer.startUpload({
-  url: "https://your-upload-endpoint.com/upload",
-  path: "/path/to/your/file.mp4",
-  headers: {
-    "Content-Type": "application/octet-stream",
-    Authorization: "Bearer your-token",
-  },
+	url: "https://your-upload-endpoint.com/upload",
+	path: "/path/to/your/file.mp4",
+	headers: {
+		"Content-Type": "application/octet-stream",
+		Authorization: "Bearer your-token",
+	},
 });
 
 console.log(`Upload started with ID: ${uploadId}`);
@@ -49,8 +46,8 @@ console.log(`Upload started with ID: ${uploadId}`);
 
 ```typescript
 const downloadId = await ExpoBackgroundStreamer.startDownload({
-  url: "https://example.com/large-file.zip",
-  path: "/path/to/save/file.zip",
+	url: "https://example.com/large-file.zip",
+	path: "/path/to/save/file.zip",
 });
 
 console.log(`Download started with ID: ${downloadId}`);
@@ -61,19 +58,19 @@ console.log(`Download started with ID: ${downloadId}`);
 ```typescript
 // Listen for upload progress
 const uploadSub = ExpoBackgroundStreamer.addListener(
-  "upload-progress",
-  (event) => {
-    console.log(`Upload: ${event.progress}% - ${event.speed} bytes/s`);
-    console.log(`ETA: ${event.estimatedTimeRemaining}s`);
-  }
+	"upload-progress",
+	(event) => {
+		console.log(`Upload: ${event.progress}% - ${event.speed} bytes/s`);
+		console.log(`ETA: ${event.estimatedTimeRemaining}s`);
+	}
 );
 
 // Listen for download progress
 const downloadSub = ExpoBackgroundStreamer.addListener(
-  "download-progress",
-  (event) => {
-    console.log(`Download: ${event.progress}% - ${event.speed} bytes/s`);
-  }
+	"download-progress",
+	(event) => {
+		console.log(`Download: ${event.progress}% - ${event.speed} bytes/s`);
+	}
 );
 
 // Clean up listeners
@@ -92,13 +89,13 @@ const key = await Crypto.getRandomBytesAsync(32);
 const nonce = await Crypto.getRandomBytesAsync(16);
 
 const uploadId = await ExpoBackgroundStreamer.startUpload({
-  url: "https://your-secure-endpoint.com/upload",
-  path: "/path/to/sensitive-file.pdf",
-  encryption: {
-    enabled: true,
-    key: Buffer.from(key).toString("hex"),
-    nonce: Buffer.from(nonce).toString("hex"),
-  },
+	url: "https://your-secure-endpoint.com/upload",
+	path: "/path/to/sensitive-file.pdf",
+	encryption: {
+		enabled: true,
+		key: Buffer.from(key).toString("hex"),
+		nonce: Buffer.from(nonce).toString("hex"),
+	},
 });
 ```
 
@@ -112,14 +109,14 @@ Starts a background upload and returns the upload ID.
 
 ```typescript
 interface UploadOptions {
-  url: string; // Upload endpoint URL
-  path: string; // Local file path
-  method?: string; // HTTP method (default: "POST")
-  headers?: Record<string, string>; // HTTP headers
-  customTransferId?: string; // Custom transfer ID
-  appGroup?: string; // iOS app group identifier
-  encryption?: EncryptionOptions; // Encryption settings
-  compression?: CompressionOptions; // Compression settings
+	url: string; // Upload endpoint URL
+	path: string; // Local file path
+	method?: string; // HTTP method (default: "POST")
+	headers?: Record<string, string>; // HTTP headers
+	customTransferId?: string; // Custom transfer ID
+	appGroup?: string; // iOS app group identifier
+	encryption?: EncryptionOptions; // Encryption settings
+	compression?: CompressionOptions; // Compression settings
 }
 ```
 
@@ -129,13 +126,13 @@ Starts a background download and returns the download ID.
 
 ```typescript
 interface DownloadOptions {
-  url: string; // Download URL
-  path: string; // Local save path
-  headers?: Record<string, string>; // HTTP headers
-  customTransferId?: string; // Custom transfer ID
-  appGroup?: string; // iOS app group identifier
-  encryption?: EncryptionOptions; // Encryption settings
-  compression?: CompressionOptions; // Compression settings
+	url: string; // Download URL
+	path: string; // Local save path
+	headers?: Record<string, string>; // HTTP headers
+	customTransferId?: string; // Custom transfer ID
+	appGroup?: string; // iOS app group identifier
+	encryption?: EncryptionOptions; // Encryption settings
+	compression?: CompressionOptions; // Compression settings
 }
 ```
 
@@ -157,11 +154,11 @@ Gets detailed information about a file.
 
 ```typescript
 interface FileInfo {
-  exists: boolean;
-  size: number;
-  name: string;
-  extension: string;
-  mimeType: string;
+	exists: boolean;
+	size: number;
+	name: string;
+	extension: string;
+	mimeType: string;
 }
 ```
 
@@ -169,9 +166,9 @@ interface FileInfo {
 
 ```typescript
 interface EncryptionOptions {
-  enabled: boolean; // Enable/disable encryption
-  key: string; // Hex-encoded encryption key (32 bytes)
-  nonce: string; // Hex-encoded nonce (16 bytes)
+	enabled: boolean; // Enable/disable encryption
+	key: string; // Hex-encoded encryption key (32 bytes)
+	nonce: string; // Hex-encoded nonce (16 bytes)
 }
 ```
 
@@ -179,7 +176,7 @@ interface EncryptionOptions {
 
 ```typescript
 interface CompressionOptions {
-  enabled: boolean; // Enable/disable compression
+	enabled: boolean; // Enable/disable compression
 }
 ```
 
@@ -193,12 +190,12 @@ Subscribe to transfer events using `addListener()`:
 
   ```typescript
   {
-    uploadId: string;
-    progress: number; // 0-100
-    bytesWritten: number;
-    totalBytes: number;
-    speed: number; // bytes per second
-    estimatedTimeRemaining: number; // seconds
+  	uploadId: string;
+  	progress: number; // 0-100
+  	bytesWritten: number;
+  	totalBytes: number;
+  	speed: number; // bytes per second
+  	estimatedTimeRemaining: number; // seconds
   }
   ```
 
@@ -206,12 +203,12 @@ Subscribe to transfer events using `addListener()`:
 
   ```typescript
   {
-    uploadId: string;
-    response: string;
-    responseHeaders: Record<string, string>;
-    responseCode: number;
-    totalBytes: number;
-    duration: number; // seconds
+  	uploadId: string;
+  	response: string;
+  	responseHeaders: Record<string, string>;
+  	responseCode: number;
+  	totalBytes: number;
+  	duration: number; // seconds
   }
   ```
 
@@ -235,40 +232,6 @@ Subscribe to transfer events using `addListener()`:
 
 - **`error`** - Error occurred during transfer
 - **`debug`** - Debug information (info, warn, error, debug levels)
-
-## 🏗️ Platform-Specific Notes
-
-### iOS
-
-- Requires background fetch capability in your `app.json`:
-  ```json
-  {
-    "expo": {
-      "ios": {
-        "backgroundModes": ["background-fetch", "background-processing"]
-      }
-    }
-  }
-  ```
-- Supports background transfers even when app is terminated
-- Progress notifications shown in notification center
-- Supports iOS app groups for shared container access
-
-### Android
-
-- Requires foreground service permission in your `app.json`:
-  ```json
-  {
-    "expo": {
-      "android": {
-        "permissions": ["FOREGROUND_SERVICE", "WAKE_LOCK"]
-      }
-    }
-  }
-  ```
-- Supports background transfers with Doze mode optimization
-- Progress notifications shown in notification center
-- Works with Android's background execution limits
 
 ## 🧪 Test Server
 
