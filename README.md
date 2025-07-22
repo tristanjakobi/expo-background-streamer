@@ -268,6 +268,4 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 📞 Support
 
-- 🐛 **Bug reports**: [GitHub Issues](https://github.com/tristanjakobi/expo-background-streamer/issues)
-- 💬 **Questions**: [GitHub Discussions](https://github.com/tristanjakobi/expo-background-streamer/discussions)
 - 📧 **Email**: tristanjakobi08@gmail.com
